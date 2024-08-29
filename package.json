@@ -1,6 +1,6 @@
 {
   "name": "koishi-plugin-monetary-rank",
-  "description": "",
+  "description": "通用货币排行榜，支持本群排行和跨群排行。\uD83D\uDCB0✨",
   "version": "0.0.1",
   "main": "lib/index.js",
   "typings": "lib/index.d.ts",
@@ -8,15 +8,38 @@
     "lib",
     "dist"
   ],
+  "koishi": {
+    "service": {
+      "required": [
+        "database",
+        "monetary"
+      ],
+      "optional": [
+        "puppeteer"
+      ]
+    }
+  },
   "license": "MIT",
-  "scripts": {},
+  "author": "Nawyjx <3373167460@qq.com>",
+  "homepage": "https://www.npmjs.com/package/koishi-plugin-monetary-rank?activeTab=readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/araea/koishi-plugin-monetary-rank.git"
+  },
   "keywords": [
     "chatbot",
     "koishi",
-    "plugin"
+    "plugin",
+    "monetary",
+    "rank",
+    "monetary-rank",
+    "通用货币",
+    "排行榜",
+    "货币排行榜"
   ],
-  "devDependencies": {},
   "peerDependencies": {
-    "koishi": "^4.17.12"
+    "koishi": "^4.17.12",
+    "koishi-plugin-puppeteer": "^3.9.0",
+    "koishi-plugin-monetary": "^0.1.3"
   }
 }
