@@ -29,6 +29,10 @@
 
 其中 `displaySize` 是可选参数，用于指定显示的排行数量。
 
+## 🌸 测试图
+
+![image](https://github.com/user-attachments/assets/68cad6c7-edeb-454a-9299-1ad70d66d83e)
+
 ## 🍧 致谢
 
 * [Koishi](https://koishi.chat/) - 强大而灵活的机器人框架
