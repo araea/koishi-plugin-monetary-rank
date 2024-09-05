@@ -281,7 +281,7 @@ export async function apply(ctx: Context, config: Config) {
       const context = await browser.createBrowserContext()
       const page = await context.newPage()
       if (config.style === '1') {
-        await page.setViewport({width: 600, height: 100, deviceScaleFactor: 1})
+        await page.setViewport({width: 800, height: 100, deviceScaleFactor: 2})
       } else if (config.style === '2') {
         await page.setViewport({width: 1080, height: 256, deviceScaleFactor: 1})
       }

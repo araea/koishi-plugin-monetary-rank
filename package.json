@@ -1,7 +1,7 @@
 {
   "name": "koishi-plugin-monetary-rank",
   "description": "通用货币排行榜，支持本群排行和跨群排行。💰✨",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "main": "lib/index.js",
   "typings": "lib/index.d.ts",
   "files": [
