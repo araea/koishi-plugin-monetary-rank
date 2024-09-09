@@ -43,6 +43,7 @@
 
 - `isLeaderboardDisplayedAsImage`：排行榜是否以图片形式显示 (默认值：false)
 - `style`：排行榜样式 (默认值：2)
+- `waitUntil`：等待页面加载的事件 (默认值：'networkidle0')
 - `horizontalBarBackgroundFullOpacity`：自定义水平柱状条背景整条的不透明度 (默认值：0)
 - `horizontalBarBackgroundOpacity`：自定义水平柱状条背景的不透明度 (默认值：0.6)
 - `shouldMoveIconToBarEndLeft`：是否将自定义图标移动到水平柱状条末端的左侧 (默认值：true)

@@ -45,11 +45,12 @@ export const usage = `## 🌈 使用指南
 // pz*
 export interface Config {
   // 排行榜显示设置
-  defaultLeaderboardDisplayCount: number
+  defaultLeaderboardDisplayCount: number;
 
   // 图片转换功能设置
-  isLeaderboardDisplayedAsImage: boolean
-  style: '1' | '2'
+  isLeaderboardDisplayedAsImage: boolean;
+  style: '1' | '2';
+  waitUntil: 'load' | 'domcontentloaded' | 'networkidle0' | 'networkidle2';
   horizontalBarBackgroundFullOpacity: number;
   horizontalBarBackgroundOpacity: number;
   shouldMoveIconToBarEndLeft: boolean;
@@ -66,6 +67,7 @@ export const Config: Schema<Config> = Schema.intersect([
       Schema.const('1').description('样式 1（文字列表）'),
       Schema.const('2').description('样式 2（水平柱状图）'),
     ]).role('radio').default('2').description('排行榜样式。'),
+    waitUntil: Schema.union(['load', 'domcontentloaded', 'networkidle0', 'networkidle2']).default('networkidle0').description('（仅样式 2）等待页面加载的事件。'),
     horizontalBarBackgroundFullOpacity: Schema.number().min(0).max(1).default(0).description('（仅样式 2）自定义水平柱状条背景整条的不透明度，值越小则越透明。'),
     horizontalBarBackgroundOpacity: Schema.number().min(0).max(1).default(0.6).description('（仅样式 2）自定义水平柱状条背景的不透明度，值越小则越透明。'),
     shouldMoveIconToBarEndLeft: Schema.boolean().default(true).description('（仅样式 2）是否将自定义图标移动到水平柱状条末端的左侧，关闭后将放在用户名的右侧。'),
@@ -287,7 +289,7 @@ export async function apply(ctx: Context, config: Config) {
       }
       await page.goto('file://' + filePath);
 
-      await page.setContent(h.unescape(html), {waitUntil: 'load'});
+      await page.setContent(h.unescape(html), {waitUntil: config.waitUntil});
 
       const buffer = await page.screenshot({type: 'png', fullPage: true});
       await page.close();
