@@ -345,7 +345,7 @@ export async function apply(ctx: Context, config: Config) {
         await page.setViewport({ width: 1080, height: 256, deviceScaleFactor: 1 })
       }
       else if (config.style === '3') {
-        await page.setViewport({ width: 600, height: 256, deviceScaleFactor: 2 })
+        await page.setViewport({ width: 550, height: 256, deviceScaleFactor: 2 })
 
       }
       await page.goto('file://' + filePath);
@@ -360,13 +360,11 @@ export async function apply(ctx: Context, config: Config) {
   }
 
   async function generateLeaderboardHtmlStyle3(rankTitle: string, monetaryRanks: MonetaryRank[]) {
-   // const now = new Date();
-   // const currentMonth = now.getMonth() + 1;
     const rankData = monetaryRanks.map((rank, index) => ({
       order: index + 1,
       card: rank.username,
       sum: rank.value,
-      channels: rank.channelId, 
+      channels: rank.channelId,
     }));
 
     const leaderboardHTML = `    
@@ -381,19 +379,17 @@ body {
   font-family: 'Microsoft YaHei', Arial, sans-serif;
   background-color: #f0f4f8;
   margin: 0;
-  padding: 20px;
-  display: flex;
-  justify-content: center;
-  align-items: flex-start;
+  padding: 0px;
+  display: flex; 
+  justify-content: center; 
+  align-items: center;
+  min-height: 100vh; 
 }
 .container {
   background-color: white;
   border-radius: 10px;
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-  padding-top: 30px;    /* 保持顶部内边距 */
-  padding-bottom: 10px; /* 减小底部内边距 */
-  padding-left: 30px;   /* 保持左右内边距 */
-  padding-right: 30px;  /* 保持左右内边距 */
+  padding: 30px;
   width: 100%;
   max-width: 500px;
 }
@@ -411,7 +407,7 @@ h1 {
 .ranking-item {
   display: flex;
   align-items: center;
-  padding: 15px 10px;
+  padding: 15px 10px; 
   border-bottom: 1px solid #ecf0f1;
   transition: background-color 0.3s;
 }
@@ -1124,4 +1120,3 @@ async function getAverageColor(avatarBase64) {
     await session.send(message);
   }
 }
-
