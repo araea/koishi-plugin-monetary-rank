@@ -225,9 +225,6 @@ export async function apply(ctx: Context, config: Config) {
       let targetUserId: string = session.userId; // 默认查询自己
       let targetUsername: string = session.username;
       let parsedUser: any;
-      if (!userArg) {
-        await session.execute(`monetaryRank.查询货币 -h`);
-      }
 
       if (userArg) {
         parsedUser = h.parse(userArg)[0];
