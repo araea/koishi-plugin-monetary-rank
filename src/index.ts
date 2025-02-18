@@ -1,6 +1,6 @@
-import { Context, h, Schema } from 'koishi'
-import { } from 'koishi-plugin-puppeteer'
-import { } from '@koishijs/canvas'
+import {Context, h, Schema} from 'koishi'
+import {} from 'koishi-plugin-puppeteer'
+import {} from '@koishijs/canvas'
 import path from "path";
 import fs from "fs";
 
@@ -150,15 +150,15 @@ export async function apply(ctx: Context, config: Config) {
     platform: 'string',
     username: 'string',
     channelId: 'string',
-  }, { primary: 'id', autoInc: true });
+  }, {primary: 'id', autoInc: true});
 
   // jt* sj*
   ctx.on('message', async (session) => {
-    const user: Username[] = await ctx.database.get('username', { userId: session.userId, channelId: session.channelId });
+    const user: Username[] = await ctx.database.get('username', {userId: session.userId, channelId: session.channelId});
     const username = session.author.nick ? session.author.nick : session.author.name ? session.author.name : '神秘人';
     const avatar = session.author.avatar ? session.author.avatar : 'https://th.bing.com/th/id/OIP.s5N_QuGWAIWBmUyeNemQagHaHZ?w=512&h=512&c=7&r=0&o=5&dpr=1.3&pid=1.7';
     if (user.length === 0) {
-      const binding: Binding[] = await ctx.database.get('binding', { pid: session.userId, platform: session.platform });
+      const binding: Binding[] = await ctx.database.get('binding', {pid: session.userId, platform: session.platform});
       const uid = binding[0].aid;
       await ctx.database.create('username', {
         uid: uid,
@@ -169,7 +169,7 @@ export async function apply(ctx: Context, config: Config) {
         channelId: session.channelId,
       })
     } else if (user[0].username !== username || user[0].avatar !== avatar) {
-      await ctx.database.set('username', { userId: session.userId, channelId: session.channelId }, {
+      await ctx.database.set('username', {userId: session.userId, channelId: session.channelId}, {
         username: username,
         avatar: avatar,
       })
@@ -179,18 +179,18 @@ export async function apply(ctx: Context, config: Config) {
   // zl*
   // bz* h*
   ctx.command('monetaryRank', '查看货币排行榜帮助')
-    .action(async ({ session }) => {
+    .action(async ({session}) => {
       await session.execute(`monetaryRank -h`);
     });
   // bqphb*
   ctx.command('monetaryRank.本群个人货币排行榜 [displaySize:number]', '查看本群个人货币排行榜')
-    .action(async ({ session }, displaySize = config.defaultLeaderboardDisplayCount) => {
+    .action(async ({session}, displaySize = config.defaultLeaderboardDisplayCount) => {
       if (!isValidDisplaySize(displaySize)) {
         displaySize = config.defaultLeaderboardDisplayCount;
       }
       const monetaries = await ctx.database.get('monetary', {});
-      const usernames = await ctx.database.get('username', { platform: session.platform, channelId: session.channelId });
-      const bindings = await ctx.database.get('binding', { platform: session.platform });
+      const usernames = await ctx.database.get('username', {platform: session.platform, channelId: session.channelId});
+      const bindings = await ctx.database.get('binding', {platform: session.platform});
       const monetaryRanks = generateMonetaryRanks(monetaries, usernames, bindings).filter(rank => rank.channelId === session.channelId).slice(0, displaySize);
       if (config.isLeaderboardDisplayedAsImage) {
         const rankTitle = `本群个人货币排行榜`;
@@ -202,13 +202,13 @@ export async function apply(ctx: Context, config: Config) {
     });
   // kqphb*
   ctx.command('monetaryRank.跨群个人货币排行榜 [displaySize:number]', '查看跨群个人货币排行榜')
-    .action(async ({ session }, displaySize = config.defaultLeaderboardDisplayCount) => {
+    .action(async ({session}, displaySize = config.defaultLeaderboardDisplayCount) => {
       if (!isValidDisplaySize(displaySize)) {
         displaySize = config.defaultLeaderboardDisplayCount;
       }
       const monetaries = await ctx.database.get('monetary', {});
-      const usernames = await ctx.database.get('username', { platform: session.platform });
-      const bindings = await ctx.database.get('binding', { platform: session.platform });
+      const usernames = await ctx.database.get('username', {platform: session.platform});
+      const bindings = await ctx.database.get('binding', {platform: session.platform});
       const monetaryRanks = generateMonetaryRanks(monetaries, usernames, bindings).slice(0, displaySize);
       if (config.isLeaderboardDisplayedAsImage) {
         const rankTitle = `跨群个人货币排行榜`;
@@ -218,10 +218,10 @@ export async function apply(ctx: Context, config: Config) {
         await sendMessage(session, `跨群个人货币排行榜：\n${monetaryRanks.map((rank, index) => `${index + 1}. ${rank.username}(${rank.userId}) - ${rank.value}`).join('\n')}`);
       }
     });
-
+  // cx*
   ctx.command('monetaryRank.查询货币 [userArg]', '查询货币余额')
     .option('currency', '-c <currency:string> 指定查询的货币种类')
-    .action(async ({ session, options }, userArg) => {
+    .action(async ({session, options}, userArg) => {
       let targetUserId: string = session.userId; // 默认查询自己
       let targetUsername: string = session.username;
       let parsedUser: any;
@@ -241,7 +241,7 @@ export async function apply(ctx: Context, config: Config) {
 
       let uid: number;
       try {
-        const bindingRecord = await ctx.database.get('binding', { pid: targetUserId, platform: session.platform });
+        const bindingRecord = await ctx.database.get('binding', {pid: targetUserId, platform: session.platform});
         if (bindingRecord.length === 0) {
           await session.send(`未找到用户 ${targetUsername} 的账户信息。`);
           return;
@@ -257,7 +257,7 @@ export async function apply(ctx: Context, config: Config) {
 
       if (currencyOption) {
         // 查询指定货币余额
-        const monetaryData = await ctx.database.get('monetary', { uid, currency: currencyOption });
+        const monetaryData = await ctx.database.get('monetary', {uid, currency: currencyOption});
         if (monetaryData.length === 0) {
           await session.send(`${targetUsername} 没有 ${currencyOption} 货币的记录。`);
           return;
@@ -266,7 +266,7 @@ export async function apply(ctx: Context, config: Config) {
         await session.send(`${targetUsername} 的 ${currencyOption} 货币余额为 ${balance}`);
       } else {
         // 查询所有货币余额或默认货币余额
-        const allMonetaryData = await ctx.database.get('monetary', { uid });
+        const allMonetaryData = await ctx.database.get('monetary', {uid});
         if (allMonetaryData.length === 0) {
           await session.send(`${targetUsername} 没有任何货币记录。`);
           return;
@@ -296,7 +296,7 @@ export async function apply(ctx: Context, config: Config) {
         const fileData = fs.readFileSync(filePath);
         const barBgImgBase64 = fileData.toString('base64');
 
-        barBgImgs.push({ userId, barBgImgBase64 });
+        barBgImgs.push({userId, barBgImgBase64});
       });
 
     } catch (err) {
@@ -318,7 +318,7 @@ export async function apply(ctx: Context, config: Config) {
         const fileData = fs.readFileSync(filePath);
         const iconBase64 = fileData.toString('base64');
 
-        iconData.push({ userId, iconBase64 });
+        iconData.push({userId, iconBase64});
       });
 
     } catch (err) {
@@ -330,7 +330,7 @@ export async function apply(ctx: Context, config: Config) {
 
   async function ensureDirExists(dirPath: string) {
     if (!fs.existsSync(dirPath)) {
-      fs.mkdirSync(dirPath, { recursive: true });
+      fs.mkdirSync(dirPath, {recursive: true});
     }
   }
 
@@ -340,19 +340,18 @@ export async function apply(ctx: Context, config: Config) {
       const context = await browser.createBrowserContext()
       const page = await context.newPage()
       if (config.style === '1') {
-        await page.setViewport({ width: 800, height: 100, deviceScaleFactor: 2 })
+        await page.setViewport({width: 800, height: 100, deviceScaleFactor: 2})
       } else if (config.style === '2') {
-        await page.setViewport({ width: 1080, height: 256, deviceScaleFactor: 1 })
-      }
-      else if (config.style === '3') {
-        await page.setViewport({ width: 550, height: 256, deviceScaleFactor: 2 })
+        await page.setViewport({width: 1080, height: 256, deviceScaleFactor: 1})
+      } else if (config.style === '3') {
+        await page.setViewport({width: 550, height: 256, deviceScaleFactor: 2})
 
       }
       await page.goto('file://' + filePath);
 
-      await page.setContent(h.unescape(html), { waitUntil: config.waitUntil });
+      await page.setContent(h.unescape(html), {waitUntil: config.waitUntil});
 
-      const buffer = await page.screenshot({ type: 'png', fullPage: true });
+      const buffer = await page.screenshot({type: 'png', fullPage: true});
       await page.close();
       await context.close();
       await sendMessage(session, h.image(buffer, 'image/png'));
@@ -367,7 +366,7 @@ export async function apply(ctx: Context, config: Config) {
       channels: rank.channelId,
     }));
 
-    const leaderboardHTML = `    
+    const leaderboardHTML = `
 <!DOCTYPE html >
   <html lang="zh-CN" >
     <head>
@@ -380,10 +379,10 @@ body {
   background-color: #f0f4f8;
   margin: 0;
   padding: 0px;
-  display: flex; 
-  justify-content: center; 
+  display: flex;
+  justify-content: center;
   align-items: center;
-  min-height: 100vh; 
+  min-height: 100vh;
 }
 .container {
   background-color: white;
@@ -407,7 +406,7 @@ h1 {
 .ranking-item {
   display: flex;
   align-items: center;
-  padding: 15px 10px; 
+  padding: 15px 10px;
   border-bottom: 1px solid #ecf0f1;
   transition: background-color 0.3s;
 }
@@ -461,7 +460,7 @@ ${deer.order === 3 ? '<span class="medal">🥉</span>' : ''}
 <span class="count">${deer.sum}</span>
 </li>
 `).join('')
-      }
+    }
 </ol>
   </div>
   </body>
@@ -597,7 +596,7 @@ ${deer.order === 3 ? '<span class="medal">🥉</span>' : ''}
   }
 
   function getCurrentBeijingTime(): string {
-    const beijingTime = new Date().toLocaleString("zh-CN", { timeZone: "Asia/Shanghai" });
+    const beijingTime = new Date().toLocaleString("zh-CN", {timeZone: "Asia/Shanghai"});
     const date = beijingTime.split(" ")[0];
     const time = beijingTime.split(" ")[1];
 

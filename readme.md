@@ -1,6 +1,7 @@
 # koishi-plugin-monetary-rank
 
-[![npm](https://img.shields.io/npm/v/koishi-plugin-monetary-rank?style=flat-square)](https://www.npmjs.com/package/koishi-plugin-monetary-rank)
+[<img alt="github" src="https://img.shields.io/badge/github-araea/monetary_rank-8da0cb?style=for-the-badge&labelColor=555555&logo=github" height="20">](https://github.com/araea/koishi-plugin-monetary-rank)
+[<img alt="npm" src="https://img.shields.io/npm/v/koishi-plugin-monetary-rank.svg?style=for-the-badge&color=fc8d62&logo=npm" height="20">](https://www.npmjs.com/package/koishi-plugin-monetary-rank)
 
 ## 介绍
 
@@ -43,10 +44,10 @@ Koishi 的通用货币排行榜插件。
 
 ![image](https://i0.hdslb.com/bfs/article/39dd40e20d04f85291bc2cb7cc0a367f312276085.png)
 
-
 ## 致谢
 
 * [Koishi](https://koishi.chat/)
+* [shangxueink](https://github.com/araea/koishi-plugin-monetary-rank/pull/1)
 
 ## QQ 群
 

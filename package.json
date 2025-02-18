@@ -19,8 +19,11 @@
       ]
     }
   },
-  "license": "MIT",
-  "author": "Nawyjx <3373167460@qq.com>",
+  "license": "MIT OR Apache-2.0",
+  "contributors": [
+    "Nawyjx <3373167460@qq.com>",
+    "shangxueink <1919892171@qq.com>"
+  ],
   "homepage": "https://www.npmjs.com/package/koishi-plugin-monetary-rank?activeTab=readme",
   "repository": {
     "type": "git",
