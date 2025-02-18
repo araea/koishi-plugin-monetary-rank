@@ -37,6 +37,13 @@ Koishi 的通用货币排行榜插件。
 
 ![image](https://github.com/user-attachments/assets/eb6bf930-12e7-450b-89de-2e07f678c66e)
 
+## 样式 3
+
+参考deer-pipe插件的预览图
+
+![image](https://i0.hdslb.com/bfs/article/39dd40e20d04f85291bc2cb7cc0a367f312276085.png)
+
+
 ## 致谢
 
 * [Koishi](https://koishi.chat/)

@@ -1,6 +1,6 @@
-import {Context, h, Schema} from 'koishi'
-import {} from 'koishi-plugin-puppeteer'
-import {} from '@koishijs/canvas'
+import { Context, h, Schema } from 'koishi'
+import { } from 'koishi-plugin-puppeteer'
+import { } from '@koishijs/canvas'
 import path from "path";
 import fs from "fs";
 
@@ -41,7 +41,7 @@ export interface Config {
 
   // 图片转换功能设置
   isLeaderboardDisplayedAsImage: boolean;
-  style: '1' | '2';
+  style: '1' | '2' | '3';
   waitUntil: 'load' | 'domcontentloaded' | 'networkidle0' | 'networkidle2';
   horizontalBarBackgroundFullOpacity: number;
   horizontalBarBackgroundOpacity: number;
@@ -58,6 +58,7 @@ export const Config: Schema<Config> = Schema.intersect([
     style: Schema.union([
       Schema.const('1').description('样式 1（文字列表）'),
       Schema.const('2').description('样式 2（水平柱状图）'),
+      Schema.const('3').description('样式 3（deer-pipe插件的排行榜样式）'),
     ]).role('radio').default('2').description('排行榜样式。'),
     waitUntil: Schema.union(['load', 'domcontentloaded', 'networkidle0', 'networkidle2']).default('networkidle0').description('等待页面加载的事件。'),
     horizontalBarBackgroundFullOpacity: Schema.number().min(0).max(1).default(0).description('（仅样式 2）自定义水平柱状条背景整条的不透明度，值越小则越透明。'),
@@ -149,15 +150,15 @@ export async function apply(ctx: Context, config: Config) {
     platform: 'string',
     username: 'string',
     channelId: 'string',
-  }, {primary: 'id', autoInc: true});
+  }, { primary: 'id', autoInc: true });
 
   // jt* sj*
   ctx.on('message', async (session) => {
-    const user: Username[] = await ctx.database.get('username', {userId: session.userId, channelId: session.channelId});
+    const user: Username[] = await ctx.database.get('username', { userId: session.userId, channelId: session.channelId });
     const username = session.author.nick ? session.author.nick : session.author.name ? session.author.name : '神秘人';
     const avatar = session.author.avatar ? session.author.avatar : 'https://th.bing.com/th/id/OIP.s5N_QuGWAIWBmUyeNemQagHaHZ?w=512&h=512&c=7&r=0&o=5&dpr=1.3&pid=1.7';
     if (user.length === 0) {
-      const binding: Binding[] = await ctx.database.get('binding', {pid: session.userId, platform: session.platform});
+      const binding: Binding[] = await ctx.database.get('binding', { pid: session.userId, platform: session.platform });
       const uid = binding[0].aid;
       await ctx.database.create('username', {
         uid: uid,
@@ -168,7 +169,7 @@ export async function apply(ctx: Context, config: Config) {
         channelId: session.channelId,
       })
     } else if (user[0].username !== username || user[0].avatar !== avatar) {
-      await ctx.database.set('username', {userId: session.userId, channelId: session.channelId}, {
+      await ctx.database.set('username', { userId: session.userId, channelId: session.channelId }, {
         username: username,
         avatar: avatar,
       })
@@ -178,18 +179,18 @@ export async function apply(ctx: Context, config: Config) {
   // zl*
   // bz* h*
   ctx.command('monetaryRank', '查看货币排行榜帮助')
-    .action(async ({session}) => {
+    .action(async ({ session }) => {
       await session.execute(`monetaryRank -h`);
     });
   // bqphb*
   ctx.command('monetaryRank.本群个人货币排行榜 [displaySize:number]', '查看本群个人货币排行榜')
-    .action(async ({session}, displaySize = config.defaultLeaderboardDisplayCount) => {
+    .action(async ({ session }, displaySize = config.defaultLeaderboardDisplayCount) => {
       if (!isValidDisplaySize(displaySize)) {
         displaySize = config.defaultLeaderboardDisplayCount;
       }
       const monetaries = await ctx.database.get('monetary', {});
-      const usernames = await ctx.database.get('username', {platform: session.platform, channelId: session.channelId});
-      const bindings = await ctx.database.get('binding', {platform: session.platform});
+      const usernames = await ctx.database.get('username', { platform: session.platform, channelId: session.channelId });
+      const bindings = await ctx.database.get('binding', { platform: session.platform });
       const monetaryRanks = generateMonetaryRanks(monetaries, usernames, bindings).filter(rank => rank.channelId === session.channelId).slice(0, displaySize);
       if (config.isLeaderboardDisplayedAsImage) {
         const rankTitle = `本群个人货币排行榜`;
@@ -201,13 +202,13 @@ export async function apply(ctx: Context, config: Config) {
     });
   // kqphb*
   ctx.command('monetaryRank.跨群个人货币排行榜 [displaySize:number]', '查看跨群个人货币排行榜')
-    .action(async ({session}, displaySize = config.defaultLeaderboardDisplayCount) => {
+    .action(async ({ session }, displaySize = config.defaultLeaderboardDisplayCount) => {
       if (!isValidDisplaySize(displaySize)) {
         displaySize = config.defaultLeaderboardDisplayCount;
       }
       const monetaries = await ctx.database.get('monetary', {});
-      const usernames = await ctx.database.get('username', {platform: session.platform});
-      const bindings = await ctx.database.get('binding', {platform: session.platform});
+      const usernames = await ctx.database.get('username', { platform: session.platform });
+      const bindings = await ctx.database.get('binding', { platform: session.platform });
       const monetaryRanks = generateMonetaryRanks(monetaries, usernames, bindings).slice(0, displaySize);
       if (config.isLeaderboardDisplayedAsImage) {
         const rankTitle = `跨群个人货币排行榜`;
@@ -215,6 +216,70 @@ export async function apply(ctx: Context, config: Config) {
         await htmlToBufferAndSendMessage(session, html);
       } else {
         await sendMessage(session, `跨群个人货币排行榜：\n${monetaryRanks.map((rank, index) => `${index + 1}. ${rank.username}(${rank.userId}) - ${rank.value}`).join('\n')}`);
+      }
+    });
+
+  ctx.command('monetaryRank.查询货币 [userArg]', '查询货币余额')
+    .option('currency', '-c <currency:string> 指定查询的货币种类')
+    .action(async ({ session, options }, userArg) => {
+      let targetUserId: string = session.userId; // 默认查询自己
+      let targetUsername: string = session.username;
+      let parsedUser: any;
+      if (!userArg) {
+        await session.execute(`monetaryRank.查询货币 -h`);
+      }
+
+      if (userArg) {
+        parsedUser = h.parse(userArg)[0];
+        if (!parsedUser || parsedUser.type !== 'at' || !parsedUser.attrs.id) {
+          await session.send('请正确 @ 用户\n示例：monetaryRank.查询货币  @用户');
+          return;
+        }
+        targetUserId = parsedUser.attrs.id;
+        targetUsername = parsedUser.attrs.name || targetUserId;
+      }
+
+      let uid: number;
+      try {
+        const bindingRecord = await ctx.database.get('binding', { pid: targetUserId, platform: session.platform });
+        if (bindingRecord.length === 0) {
+          await session.send(`未找到用户 ${targetUsername} 的账户信息。`);
+          return;
+        }
+        uid = bindingRecord[0].aid;
+      } catch (error) {
+        logger.error(`获取用户绑定信息失败: ${error}`);
+        await session.send('查询用户信息失败，请稍后重试。');
+        return;
+      }
+
+      const currencyOption = options?.currency;
+
+      if (currencyOption) {
+        // 查询指定货币余额
+        const monetaryData = await ctx.database.get('monetary', { uid, currency: currencyOption });
+        if (monetaryData.length === 0) {
+          await session.send(`${targetUsername} 没有 ${currencyOption} 货币的记录。`);
+          return;
+        }
+        const balance = monetaryData[0].value;
+        await session.send(`${targetUsername} 的 ${currencyOption} 货币余额为 ${balance}`);
+      } else {
+        // 查询所有货币余额或默认货币余额
+        const allMonetaryData = await ctx.database.get('monetary', { uid });
+        if (allMonetaryData.length === 0) {
+          await session.send(`${targetUsername} 没有任何货币记录。`);
+          return;
+        }
+
+        if (allMonetaryData.length === 1 && allMonetaryData[0].currency === 'default') {
+          // 只有 default 货币，直接显示
+          await session.send(`${targetUsername} 的货币余额为 ${allMonetaryData[0].value}`);
+        } else {
+          // 列出所有货币余额
+          const balanceList = allMonetaryData.map(item => `${item.currency}: ${item.value}`).join('\n');
+          await session.send(`${targetUsername} 的货币余额：\n${balanceList}`);
+        }
       }
     });
 
@@ -231,7 +296,7 @@ export async function apply(ctx: Context, config: Config) {
         const fileData = fs.readFileSync(filePath);
         const barBgImgBase64 = fileData.toString('base64');
 
-        barBgImgs.push({userId, barBgImgBase64});
+        barBgImgs.push({ userId, barBgImgBase64 });
       });
 
     } catch (err) {
@@ -253,7 +318,7 @@ export async function apply(ctx: Context, config: Config) {
         const fileData = fs.readFileSync(filePath);
         const iconBase64 = fileData.toString('base64');
 
-        iconData.push({userId, iconBase64});
+        iconData.push({ userId, iconBase64 });
       });
 
     } catch (err) {
@@ -265,7 +330,7 @@ export async function apply(ctx: Context, config: Config) {
 
   async function ensureDirExists(dirPath: string) {
     if (!fs.existsSync(dirPath)) {
-      fs.mkdirSync(dirPath, {recursive: true});
+      fs.mkdirSync(dirPath, { recursive: true });
     }
   }
 
@@ -275,20 +340,136 @@ export async function apply(ctx: Context, config: Config) {
       const context = await browser.createBrowserContext()
       const page = await context.newPage()
       if (config.style === '1') {
-        await page.setViewport({width: 800, height: 100, deviceScaleFactor: 2})
+        await page.setViewport({ width: 800, height: 100, deviceScaleFactor: 2 })
       } else if (config.style === '2') {
-        await page.setViewport({width: 1080, height: 256, deviceScaleFactor: 1})
+        await page.setViewport({ width: 1080, height: 256, deviceScaleFactor: 1 })
+      }
+      else if (config.style === '3') {
+        await page.setViewport({ width: 550, height: 256, deviceScaleFactor: 2 })
+
       }
       await page.goto('file://' + filePath);
 
-      await page.setContent(h.unescape(html), {waitUntil: config.waitUntil});
+      await page.setContent(h.unescape(html), { waitUntil: config.waitUntil });
 
-      const buffer = await page.screenshot({type: 'png', fullPage: true});
+      const buffer = await page.screenshot({ type: 'png', fullPage: true });
       await page.close();
       await context.close();
       await sendMessage(session, h.image(buffer, 'image/png'));
     });
   }
+
+  async function generateLeaderboardHtmlStyle3(rankTitle: string, monetaryRanks: MonetaryRank[]) {
+    const rankData = monetaryRanks.map((rank, index) => ({
+      order: index + 1,
+      card: rank.username,
+      sum: rank.value,
+      channels: rank.channelId,
+    }));
+
+    const leaderboardHTML = `    
+<!DOCTYPE html >
+  <html lang="zh-CN" >
+    <head>
+    <meta charset="UTF-8" >
+      <meta name="viewport" content = "width=device-width, initial-scale=1.0" >
+        <title>鹿管排行榜 </title>
+        <style>
+body {
+  font-family: 'Microsoft YaHei', Arial, sans-serif;
+  background-color: #f0f4f8;
+  margin: 0;
+  padding: 0px;
+  display: flex; 
+  justify-content: center; 
+  align-items: center;
+  min-height: 100vh; 
+}
+.container {
+  background-color: white;
+  border-radius: 10px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  padding: 30px;
+  width: 100%;
+  max-width: 500px;
+}
+h1 {
+  text-align: center;
+  color: #2c3e50;
+  margin-bottom: 30px;
+  font-size: 28px;
+}
+.ranking-list {
+  list-style-type: none;
+  padding: 0;
+  margin: 0;
+}
+.ranking-item {
+  display: flex;
+  align-items: center;
+  padding: 15px 10px; 
+  border-bottom: 1px solid #ecf0f1;
+  transition: background-color 0.3s;
+}
+.ranking-item:hover {
+  background-color: #f8f9fa;
+}
+.ranking-number {
+  font-size: 18px;
+  font-weight: bold;
+  margin-right: 15px;
+  min-width: 30px;
+  color: #7f8c8d;
+}
+.medal {
+  font-size: 24px;
+  margin-right: 15px;
+}
+.name {
+  flex-grow: 1;
+  font-size: 18px;
+}
+.channels {
+  font-size: 14px;
+  color: #7f8c8d;
+  margin-left: 10px;
+}
+.count {
+  font-weight: bold;
+  color: #e74c3c;
+  font-size: 18px;
+}
+.count::after {
+  content: ' 币';
+  font-size: 14px;
+  color: #95a5a6;
+}
+</style>
+  </head>
+  <body>
+  <div class="container" >
+    <h1>🦌 货币排行榜 🦌</h1>
+      <ol class="ranking-list">
+        ${rankData.map(deer => `
+<li class="ranking-item">
+<span class="ranking-number">${deer.order}</span>
+${deer.order === 1 ? '<span class="medal">🥇</span>' : ''}
+${deer.order === 2 ? '<span class="medal">🥈</span>' : ''}
+${deer.order === 3 ? '<span class="medal">🥉</span>' : ''}
+<span class="name">${deer.card}</span>
+<!--span class="channels">${deer.channels}</span-->
+<span class="count">${deer.sum}</span>
+</li>
+`).join('')
+      }
+</ol>
+  </div>
+  </body>
+  </html>
+    `;
+    return leaderboardHTML;
+  }
+
 
   function generateLeaderboardHtmlStyle1(rankTitle: string, monetaryRanks: MonetaryRank[]): string {
     const now = new Date();
@@ -416,7 +597,7 @@ export async function apply(ctx: Context, config: Config) {
   }
 
   function getCurrentBeijingTime(): string {
-    const beijingTime = new Date().toLocaleString("zh-CN", {timeZone: "Asia/Shanghai"});
+    const beijingTime = new Date().toLocaleString("zh-CN", { timeZone: "Asia/Shanghai" });
     const date = beijingTime.split(" ")[0];
     const time = beijingTime.split(" ")[1];
 
@@ -893,6 +1074,8 @@ async function getAverageColor(avatarBase64) {
       return generateLeaderboardHtmlStyle1(rankTitle, monetaryRanks);
     } else if (config.style === '2') {
       return await generateLeaderboardHtmlStyle2(rankTitle, monetaryRanks);
+    } else if (config.style === '3') {
+      return await generateLeaderboardHtmlStyle3(rankTitle, monetaryRanks);
     }
   }
 
