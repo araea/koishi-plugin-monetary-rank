@@ -11,14 +11,10 @@
     "skipLibCheck": true,
     "esModuleInterop": true,
     "moduleResolution": "bundler",
+    "resolveJsonModule": true,
     "jsx": "react-jsx",
     "jsxImportSource": "@satorijs/element",
-    "types": [
-      "node",
-      "yml-register/types"
-    ]
+    "types": ["node", "yml-register/types"]
   },
-  "include": [
-    "src"
-  ]
+  "include": ["src", "src/data/fallbackBase64.json"]
 }
