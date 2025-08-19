@@ -221,7 +221,10 @@ export async function apply(ctx: Context, config: Config) {
         pid: session.userId,
         platform: session.platform,
       });
-      const uid = binding[0].aid;
+      const binding0 = binding[0];
+      if (!binding0) return;
+      const uid = binding0.aid;
+
       await ctx.database.create("username", {
         uid: uid,
         userId: session.userId,
