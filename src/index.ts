@@ -13,6 +13,7 @@ export const inject = {
 };
 export const usage = `## 注意事项
 
+- 启用 bind 插件。
 - 用户第一次发言时记录用户数据，刚开始使用时没有数据。
 
 ## 自定义水平柱状图 2（与发言排行榜共用文件夹）
