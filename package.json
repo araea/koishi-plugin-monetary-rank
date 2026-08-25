@@ -1,21 +1,26 @@
 {
   "name": "koishi-plugin-monetary-rank",
   "description": "Koishi 的通用货币排行榜、查询余额插件。",
-  "version": "1.0.4",
+  "version": "1.1.0",
   "main": "lib/index.js",
   "typings": "lib/index.d.ts",
   "files": [
     "lib",
-    "dist"
+    "LICENSE-APACHE",
+    "LICENSE-MIT"
   ],
   "koishi": {
+    "description": {
+      "zh": "Koishi 的通用货币排行榜、查询余额插件。"
+    },
     "service": {
       "required": [
         "database",
         "monetary"
       ],
       "optional": [
-        "puppeteer"
+        "puppeteer",
+        "canvas"
       ]
     }
   },
