@@ -1,15 +1,17 @@
 koishi-plugin-monetary-rank
-========================
+===========================
 
 [<img alt="github" src="https://img.shields.io/badge/github-araea/monetary_rank-8da0cb?style=for-the-badge&labelColor=555555&logo=github" height="20">](https://github.com/araea/koishi-plugin-monetary-rank)
 [<img alt="npm" src="https://img.shields.io/npm/v/koishi-plugin-monetary-rank.svg?style=for-the-badge&color=fc8d62&logo=npm" height="20">](https://www.npmjs.com/package/koishi-plugin-monetary-rank)
 
 Koishi 的通用货币排行榜插件。
 
-## 注意事项
+与发言排行榜共用同一套水平柱状图资源。
 
-- 需要启用 `bind` 插件。
-- 用户第一次发言时才会记录昵称与头像，刚装好时榜单是空的。
+## 使用
+
+1. 启用 `bind` 插件。
+2. 用户第一次发言时才会记下昵称与头像，刚装好时榜是空的。
 
 ## 指令
 
@@ -22,34 +24,21 @@ Koishi 的通用货币排行榜插件。
 
 三个指令都支持 `-c <货币种类>` 临时指定货币，缺省用配置里的 `defaultCurrency`。
 
-## 自定义水平柱状图 2（与发言排行榜共用文件夹）
+## 样式
 
-1. 用户图标:
+与 [message-counter](https://github.com/araea/koishi-plugin-message-counter) 共用 `data/messageCounter/`。改完后重载插件生效。
 
-   - 支持为同一用户添加多个图标，它们会同时显示。
-   - 在 `data/messageCounter/icons` 文件夹下添加用户图标，文件名为用户 ID (例如 `1234567890.png`)。
-   - 多个图标的文件名需形如  `1234567890-1.png`、 `1234567890-2.png` 。
+**用户图标** — `data/messageCounter/icons/`，文件名 `用户ID.png`。多图标：`用户ID-1.png`、`用户ID-2.png`，会同时显示。
 
-2. 柱状条背景：
+**柱状条背景** — `data/messageCounter/barBgImgs/`，建议 850×50。多图随机：`用户ID-1.png`。
 
-   - 支持为同一用户添加多个背景图片，插件会随机选择一个显示。
-   - 在 `data/messageCounter/barBgImgs` 文件夹下添加水平柱状条背景图片。
-   - 多个图片的文件名需形如 `1234567890-1.png`、`1234567890-2.png`。
-   - 建议图片尺寸为 850x50 像素，文件名为用户 ID (例如`1234567890.png`)。
+## 示例
 
-> 重启插件以使更改生效。
+![样式 2](https://github.com/user-attachments/assets/eb6bf930-12e7-450b-89de-2e07f678c66e)
 
-## 测试图
+![样式 3](https://i0.hdslb.com/bfs/article/39dd40e20d04f85291bc2cb7cc0a367f312276085.png)
 
-## 样式 2
-
-![image](https://github.com/user-attachments/assets/eb6bf930-12e7-450b-89de-2e07f678c66e)
-
-## 样式 3
-
-参考deer-pipe插件的预览图
-
-![image](https://i0.hdslb.com/bfs/article/39dd40e20d04f85291bc2cb7cc0a367f312276085.png)
+样式 3 的预览来自 deer-pipe 插件。
 
 ## 致谢
 
