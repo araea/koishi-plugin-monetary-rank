@@ -99,7 +99,7 @@ export function apply(ctx: Context, config: Config) {
   }
 
   async function present(session: Session, title: string, rows: RankEntry[]) {
-    if (!rows.length) return '暂无数据。'
+    if (!rows.length) return '⚠️ 暂无数据。'
     if (!config.isLeaderboardDisplayedAsImage || !ctx.puppeteer) {
       // 昵称可能带尖括号，用 h.text 包住避免被当成消息元素解析
       return h.text([`${title}：`, ...rows.map((row, index) =>
@@ -125,7 +125,7 @@ export function apply(ctx: Context, config: Config) {
       return h.image(await screenshot(html, { measure: true }), 'image/png')
     } catch (error) {
       logger.error('生成排行榜图片失败：%s', error.stack || error.message)
-      return '生成排行榜图片失败，请查看后台日志。'
+      return '❌ 生成排行榜图片失败，请查看后台日志。'
     }
   }
 
@@ -158,7 +158,7 @@ export function apply(ctx: Context, config: Config) {
     .action(async ({ session, options }, target) => {
       const userId = target ? target.split(':')[1] : session.userId
       const [binding] = await ctx.database.get('binding', { pid: userId, platform: session.platform })
-      if (!binding) return '未找到该用户的账户信息。'
+      if (!binding) return '⚠️ 未找到该用户的账户信息。'
 
       const who = userId === session.userId ? '你' : h.at(userId)
       const records = await ctx.database.get('monetary', options.currency
@@ -167,12 +167,12 @@ export function apply(ctx: Context, config: Config) {
 
       if (!records.length) {
         return options.currency
-          ? [who, ` 没有 ${options.currency} 货币的记录。`]
+          ? [who, ` 没有「${options.currency}」的记录。`]
           : [who, ' 还没有任何货币记录。']
       }
       if (records.length === 1) {
-        return [who, ` 的 ${records[0].currency} 余额为 ${records[0].value}`]
+        return [who, ` 的 ${records[0].currency} 余额为 ${records[0].value}。`]
       }
-      return [who, ' 的货币余额：\n', records.map((row) => `${row.currency}: ${row.value}`).join('\n')]
+      return [who, ' 的货币余额：\n', records.map((row) => `${row.currency}：${row.value}`).join('\n')]
     })
 }
