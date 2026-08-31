@@ -15,23 +15,20 @@ export const inject = {
   optional: ['puppeteer', 'canvas'],
 }
 
-export const usage = `## 注意事项
+export const usage = `## 使用
 
-- 需要启用 \`bind\` 插件。
-- 用户第一次发言时才会记录昵称与头像，刚装好时榜单是空的。
+启用 \`bind\` 插件。样式资源与 [message-counter](https://github.com/araea/koishi-plugin-message-counter) 共用 \`data/messageCounter/\`。
 
-## 自定义水平柱状图（样式 2，与发言排行榜共用文件夹）
+## 指令
 
-1. 用户图标：放在 \`data/messageCounter/icons\`，文件名为用户 ID（如 \`1234567890.png\`）。
-   同一个人可放多张，命名为 \`1234567890-1.png\`、\`1234567890-2.png\`，它们会同时显示。
-2. 柱状条背景：放在 \`data/messageCounter/barBgImgs\`，命名规则同上，多张时随机取一张。
-   建议尺寸 850×50。
+| 指令 | 说明 |
+| --- | --- |
+| \`monetaryRank\` | 查看帮助 |
+| \`monetaryRank.本群个人货币排行榜 [数量]\` | 本群榜 |
+| \`monetaryRank.跨群个人货币排行榜 [数量]\` | 跨群榜 |
+| \`monetaryRank.查询货币 [@某人]\` | 查询余额 |
 
-> 改动后需重启插件生效。
-
-## QQ 群
-
-- 956758505`
+支持 \`-c <货币种类>\` 临时指定货币。`
 
 /** 昵称/头像同上次一致时跳过写库，避免每条消息都读写数据库。 */
 const SYNC_CACHE_MAX = 4096
