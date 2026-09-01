@@ -23,10 +23,10 @@ export const usage = `## 使用
 
 | 指令 | 说明 |
 | --- | --- |
-| \`monetaryRank\` | 查看帮助 |
-| \`monetaryRank.本群个人货币排行榜 [数量]\` | 本群榜 |
-| \`monetaryRank.跨群个人货币排行榜 [数量]\` | 跨群榜 |
-| \`monetaryRank.查询货币 [@某人]\` | 查询余额 |
+| \`mrank\` | 查看帮助 |
+| \`mrank.本群个人货币排行榜 [数量]\` | 本群榜 |
+| \`mrank.跨群个人货币排行榜 [数量]\` | 跨群榜 |
+| \`mrank.查询货币 [@某人]\` | 查询余额 |
 
 支持 \`-c <货币种类>\` 临时指定货币。`
 
@@ -126,11 +126,12 @@ export function apply(ctx: Context, config: Config) {
     }
   }
 
-  const cmd = ctx.command('monetaryRank', '通用货币排行榜')
-    .action(({ session }) => session.execute('help monetaryRank'))
+  const cmd = ctx.command('mrank', '通用货币排行榜')
+    .alias('monetaryRank')
+    .action(({ session }) => session.execute('help mrank'))
 
   cmd.subcommand('.本群个人货币排行榜 [count:posint]', '查看本群货币排行榜')
-    .alias('monetaryRank.本群榜')
+    .alias('mrank.本群榜')
     .option('currency', '-c <currency:string> 指定货币种类')
     .action(async ({ session, options }, count) => {
       const limit = count || config.defaultLeaderboardDisplayCount
@@ -140,7 +141,7 @@ export function apply(ctx: Context, config: Config) {
     })
 
   cmd.subcommand('.跨群个人货币排行榜 [count:posint]', '查看跨群货币排行榜')
-    .alias('monetaryRank.跨群榜')
+    .alias('mrank.跨群榜')
     .option('currency', '-c <currency:string> 指定货币种类')
     .action(async ({ session, options }, count) => {
       const limit = count || config.defaultLeaderboardDisplayCount
@@ -150,7 +151,7 @@ export function apply(ctx: Context, config: Config) {
     })
 
   cmd.subcommand('.查询货币 [target:user]', '查询货币余额')
-    .alias('monetaryRank.查询')
+    .alias('mrank.查询')
     .option('currency', '-c <currency:string> 指定货币种类')
     .action(async ({ session, options }, target) => {
       const userId = target ? target.split(':')[1] : session.userId
