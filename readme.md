@@ -1,43 +1,27 @@
-koishi-plugin-monetary-rank
-===========================
+# koishi-plugin-monetary-rank
 
-[<img alt="github" src="https://img.shields.io/badge/github-araea/koishi__plugin__monetary__rank-8da0cb?style=for-the-badge&labelColor=555555&logo=github" height="20">](https://github.com/araea/koishi-plugin-monetary-rank)
-[<img alt="npm" src="https://img.shields.io/npm/v/koishi-plugin-monetary-rank.svg?style=for-the-badge&color=fc8d62&logo=npm" height="20">](https://www.npmjs.com/package/koishi-plugin-monetary-rank)
+货币排行榜插件。
 
-Koishi 的货币排行榜插件。
+## 安装
 
-## 使用
+~~~sh
+yarn add koishi-plugin-monetary-rank
+~~~
 
-启用 `bind` 插件。样式资源与 [message-counter](https://github.com/araea/koishi-plugin-message-counter) 共用 `data/messageCounter/`。
+在 Koishi 配置中启用 koishi-plugin-monetary-rank，并提供 database 和 monetary 服务。
+图表显示需要 puppeteer 和 canvas；资源与 message-counter 共用 data/messageCounter/。
 
 ## 指令
 
 | 指令 | 说明 |
 | --- | --- |
-| `mrank` | 查看帮助 |
-| `mrank.本群个人货币排行榜 [数量]` | 本群榜 |
-| `mrank.跨群个人货币排行榜 [数量]` | 跨群榜 |
-| `mrank.查询货币 [@某人]` | 查询余额 |
+| mrank | 查看帮助 |
+| mrank.本群个人货币排行榜 [数量] | 查看本群排行 |
+| mrank.跨群个人货币排行榜 [数量] | 查看跨群排行 |
+| mrank.查询货币 [@某人] | 查询余额 |
 
-支持 `-c <货币种类>` 临时指定货币。
+使用 -c &lt;货币种类&gt; 可临时指定货币。
 
-## QQ 群
+## 许可证
 
-956758505
-
-<br>
-
-#### License
-
-<sup>
-Licensed under either of <a href="LICENSE-APACHE">Apache License, Version
-2.0</a> or <a href="LICENSE-MIT">MIT license</a> at your option.
-</sup>
-
-<br>
-
-<sub>
-Unless you explicitly state otherwise, any contribution intentionally submitted
-for inclusion in this crate by you, as defined in the Apache-2.0 license, shall
-be dual licensed as above, without any additional terms or conditions.
-</sub>
+可按 [Apache-2.0](LICENSE-APACHE) 或 [MIT](LICENSE-MIT) 使用。
