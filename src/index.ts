@@ -17,18 +17,18 @@ export const inject = {
 
 export const usage = `## 使用
 
-启用 \`bind\` 插件。样式资源与 [message-counter](https://github.com/araea/koishi-plugin-message-counter) 共用 \`data/messageCounter/\`。
+在 Koishi 配置中启用，并提供 database 与 monetary 服务；另需启用 \`bind\` 插件。图表显示需要 puppeteer 与 canvas，资源与 [message-counter](https://github.com/araea/koishi-plugin-message-counter) 共用 \`data/messageCounter/\`。
 
 ## 指令
 
 | 指令 | 说明 |
 | --- | --- |
-| \`mrank\` | 查看帮助 |
-| \`mrank.本群个人货币排行榜 [数量]\` | 本群榜 |
-| \`mrank.跨群个人货币排行榜 [数量]\` | 跨群榜 |
-| \`mrank.查询货币 [@某人]\` | 查询余额 |
+| \`mrank\` | 帮助 |
+| \`mrank.本群个人货币排行榜 [数量]\` | 本群排行 |
+| \`mrank.跨群个人货币排行榜 [数量]\` | 跨群排行 |
+| \`mrank.查询货币 [@某人]\` | 余额 |
 
-支持 \`-c <货币种类>\` 临时指定货币。`
+用 \`-c <货币种类>\` 可以临时指定货币。`
 
 /** 昵称/头像同上次一致时跳过写库，避免每条消息都读写数据库。 */
 const SYNC_CACHE_MAX = 4096
