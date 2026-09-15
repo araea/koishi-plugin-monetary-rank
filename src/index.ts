@@ -76,12 +76,24 @@ export function apply(ctx: Context, config: Config) {
     synced.set(key, `${username}\n${avatar}`)
   })
 
-  /** 截图。两种样式的宽度都由 CSS 定死，高度交给 fullPage 自适应。 */
-  async function screenshot(html: string, { width = 1080, scale = 1 } = {}) {
+  /**
+   * 截图。
+   *
+   * 柱状榜的宽度取决于最长的那串数额，页面自己在 `body` 上写死了，所以先按一个
+   * 保守的视口渲染，再回读 `scrollWidth` 把视口收到正好——不这么做，窄视口会让
+   * 轨道被横向裁掉，宽视口又会在右边留一大条空白。高度一律交给 fullPage。
+   */
+  async function screenshot(html: string, { width = 1080, scale = 1, fit = false } = {}) {
     const page = await ctx.puppeteer.page()
     try {
       await page.setViewport({ width, height: 256, deviceScaleFactor: scale })
       await page.setContent(html, { waitUntil: config.waitUntil })
+      if (fit) {
+        const measured = await page.evaluate(() => document.body.scrollWidth)
+        if (measured > 0) {
+          await page.setViewport({ width: Math.ceil(measured), height: 256, deviceScaleFactor: scale })
+        }
+      }
       return await page.screenshot({ type: 'png', fullPage: true })
     } finally {
       await page.close()
@@ -110,13 +122,20 @@ export function apply(ctx: Context, config: Config) {
           accent: avatar.accent,
         }
       }))
-      const subtitle = new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })
+      // 元信息行与 message-counter 的榜单同一种写法：范围、合计、出图时间
+      const sum = chartRows.reduce((carry, row) => carry + row.count, 0)
+      const stamp = new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })
+      const subtitle = [
+        `${chartRows.length} 位`,
+        `合计 ${sum.toLocaleString('en-US')} ${h.escape(currency)}`,
+        stamp,
+      ].join('<span class="sep">·</span>')
       const html = renderChart(title, subtitle, chartRows, icons, backgrounds, {
         horizontalBarBackgroundOpacity: config.horizontalBarBackgroundOpacity,
         horizontalBarBackgroundFullOpacity: config.horizontalBarBackgroundFullOpacity,
         shouldMoveIconToBarEndLeft: config.shouldMoveIconToBarEndLeft,
       })
-      return h.image(await screenshot(html), 'image/png')
+      return h.image(await screenshot(html, { fit: true }), 'image/png')
     } catch (error) {
       logger.error('生成排行榜图片失败：%s', error.stack || error.message)
       return '❌ 生成排行榜图片失败，请查看后台日志。'
