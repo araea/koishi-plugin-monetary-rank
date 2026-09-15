@@ -76,26 +76,19 @@ export function apply(ctx: Context, config: Config) {
     synced.set(key, `${username}\n${avatar}`)
   })
 
-  /** 截图；`measure` 用于样式 2——画布宽度要等脚本跑完才知道。 */
-  async function screenshot(html: string, { width = 1080, scale = 1, measure = false } = {}) {
+  /** 截图。两种样式的宽度都由 CSS 定死，高度交给 fullPage 自适应。 */
+  async function screenshot(html: string, { width = 1080, scale = 1 } = {}) {
     const page = await ctx.puppeteer.page()
     try {
       await page.setViewport({ width, height: 256, deviceScaleFactor: scale })
       await page.setContent(html, { waitUntil: config.waitUntil })
-      if (measure) {
-        const measured = await page.evaluate(() => {
-          const canvas = document.getElementById('rankingCanvas') as HTMLCanvasElement
-          return canvas ? canvas.width + 40 : 1080
-        })
-        await page.setViewport({ width: Math.ceil(measured), height: 256, deviceScaleFactor: scale })
-      }
       return await page.screenshot({ type: 'png', fullPage: true })
     } finally {
       await page.close()
     }
   }
 
-  async function present(session: Session, title: string, rows: RankEntry[]) {
+  async function present(session: Session, title: string, currency: string, rows: RankEntry[]) {
     if (!rows.length) return '⚠️ 暂无数据。'
     if (!config.isLeaderboardDisplayedAsImage || !ctx.puppeteer) {
       // 昵称可能带尖括号，用 h.text 包住避免被当成消息元素解析
@@ -105,21 +98,25 @@ export function apply(ctx: Context, config: Config) {
 
     try {
       if (config.style === '3') {
-        return h.image(await screenshot(renderCard(title, rows), { width: 550, scale: 2 }), 'image/png')
+        return h.image(await screenshot(renderCard(title, rows, currency), { width: 560, scale: 2 }), 'image/png')
       }
-      const chartRows = await Promise.all(rows.map(async (row) => ({
-        name: row.username,
-        userId: row.userId,
-        count: row.value,
-        avatarBase64: await loadAvatar(row.avatar),
-      })))
+      const chartRows = await Promise.all(rows.map(async (row) => {
+        const avatar = await loadAvatar(row.avatar)
+        return {
+          name: row.username,
+          userId: row.userId,
+          count: row.value,
+          avatarBase64: avatar.base64,
+          accent: avatar.accent,
+        }
+      }))
       const subtitle = new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })
       const html = renderChart(title, subtitle, chartRows, icons, backgrounds, {
         horizontalBarBackgroundOpacity: config.horizontalBarBackgroundOpacity,
         horizontalBarBackgroundFullOpacity: config.horizontalBarBackgroundFullOpacity,
         shouldMoveIconToBarEndLeft: config.shouldMoveIconToBarEndLeft,
       })
-      return h.image(await screenshot(html, { measure: true }), 'image/png')
+      return h.image(await screenshot(html), 'image/png')
     } catch (error) {
       logger.error('生成排行榜图片失败：%s', error.stack || error.message)
       return '❌ 生成排行榜图片失败，请查看后台日志。'
@@ -137,7 +134,7 @@ export function apply(ctx: Context, config: Config) {
     .action(async ({ session, options }, count) => {
       const limit = count || config.defaultLeaderboardDisplayCount
       const currency = options.currency || config.defaultCurrency
-      return present(session, '本群个人货币排行榜',
+      return present(session, '本群个人货币排行榜', currency,
         await channelRank(ctx, session.platform, session.channelId, currency, limit))
     })
 
@@ -147,7 +144,7 @@ export function apply(ctx: Context, config: Config) {
     .action(async ({ session, options }, count) => {
       const limit = count || config.defaultLeaderboardDisplayCount
       const currency = options.currency || config.defaultCurrency
-      return present(session, '跨群个人货币排行榜',
+      return present(session, '跨群个人货币排行榜', currency,
         await globalRank(ctx, session.platform, currency, limit))
     })
 

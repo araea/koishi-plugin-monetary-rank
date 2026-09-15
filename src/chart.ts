@@ -1,10 +1,24 @@
+import { h } from 'koishi'
 import { Asset } from './assets'
+import { baseline, components, harmonize, scheme, SHAPE } from './m3'
+
+/** 与卡片样式共用同一个主色，两种样式换着看也是同一套观感。 */
+const HUE = 78
+const SCHEME = scheme(HUE, false, { tertiaryShift: -60 })
+
+const ROW_HEIGHT = 64
+const AVATAR = 48
+const BAR_MIN = 0.06
+/** 条形轨道的大致可用宽度，用来判断名字放不放得下。 */
+const TRACK_WIDTH = 720
 
 export interface ChartRow {
   name: string
   userId: string
   count: number
   avatarBase64: string
+  /** 头像主色，服务端算好；空串表示取不到，回退主色。 */
+  accent: string
 }
 
 export interface ChartOptions {
@@ -13,211 +27,130 @@ export interface ChartOptions {
   shouldMoveIconToBarEndLeft: boolean
 }
 
-/** 在浏览器里执行的绘图函数，整段被序列化进页面。 */
-const CLIENT_SCRIPT = String.raw`
-async ({ rows, icons, backgrounds, options }) => {
-  const ROW_HEIGHT = 50
-  const BAR_X = 50
-  const BAR_MIN = 150
-  const BAR_SPAN = 700
-  const TABLE_WIDTH = BAR_X + BAR_MIN + BAR_SPAN
-  const FONT = '30px "Microsoft YaHei", sans-serif'
+const pick = (assets: Asset[], userId: string) =>
+  assets.filter((asset) => asset.userId === userId).map((asset) => asset.base64)
 
-  const maxCount = rows.reduce((max, row) => Math.max(max, row.count), 0) || 1
-  const canvas = document.getElementById('rankingCanvas')
-  let context = canvas.getContext('2d')
+const dataUrl = (base64: string) => `url("data:image/png;base64,${base64}")`
 
-  context.font = FONT
-  const widest = rows.find((row) => row.count === maxCount) || rows[0] || { count: 1 }
-  canvas.width = TABLE_WIDTH + 10 + context.measureText(String(widest.count)).width + 20
-  canvas.height = ROW_HEIGHT * rows.length
-
-  // 改尺寸会重置上下文状态，必须重新拿一次
-  context = canvas.getContext('2d')
-
-  for (const [index, row] of rows.entries()) {
-    const barWidth = BAR_MIN + (BAR_SPAN * row.count) / maxCount
-    const barY = ROW_HEIGHT * index
-    let avgColor = await averageColor(row.avatarBase64)
-    // 右侧留白用头像本色的半透明版本，不随自定义背景改变
-    const restColor = avgColor + '80'
-
-    context.fillStyle = avgColor
-    context.fillRect(BAR_X, barY, barWidth, ROW_HEIGHT)
-
-    const userBackgrounds = pick(backgrounds, row.userId)
-    if (userBackgrounds.length) {
-      const chosen = userBackgrounds[Math.floor(Math.random() * userBackgrounds.length)]
-      avgColor = await drawBackground(context, chosen, BAR_X, barY, barWidth) || avgColor
-    }
-
-    context.fillStyle = restColor
-    context.fillRect(BAR_X + barWidth, barY, TABLE_WIDTH - BAR_X - barWidth, ROW_HEIGHT)
-
-    await drawLabels(context, row, avgColor, barY, barWidth)
-  }
-
-  for (const [index, row] of rows.entries()) {
-    await drawImage(row.avatarBase64, (image) =>
-      context.drawImage(image, 0, ROW_HEIGHT * index, ROW_HEIGHT, ROW_HEIGHT))
-  }
-
-  context.fillStyle = 'rgba(0, 0, 0, 0.12)'
-  for (let i = 0; i < 8; i++) context.fillRect(200 + 100 * i, 0, 3, canvas.height)
-
-  // --- 辅助函数 ---
-
-  function pick(assets, userId) {
-    return assets.filter((asset) => asset.userId === userId).map((asset) => asset.base64)
-  }
-
-  function drawImage(base64, draw) {
-    return new Promise((resolve) => {
-      const image = new Image()
-      image.src = 'data:image/png;base64,' + base64
-      image.onload = async () => resolve(await draw(image))
-      image.onerror = () => resolve(undefined)
-    })
-  }
-
-  function drawBackground(context, base64, x, y, barWidth) {
-    return drawImage(base64, async (image) => {
-      context.save()
-      if (options.horizontalBarBackgroundFullOpacity > 0) {
-        context.globalAlpha = options.horizontalBarBackgroundFullOpacity
-        context.drawImage(image, x, y, TABLE_WIDTH - x, ROW_HEIGHT)
-      }
-      context.globalAlpha = options.horizontalBarBackgroundOpacity
-      context.drawImage(image, 0, 0, barWidth, ROW_HEIGHT, x, y, barWidth, ROW_HEIGHT)
-      context.restore()
-      return averageColor(base64)
-    })
-  }
-
-  async function drawLabels(context, row, avgColor, barY, barWidth) {
-    context.font = FONT
-    const textY = barY + ROW_HEIGHT / 2 + 10.5
-    const countText = String(row.count)
-    const countX = BAR_X + barWidth + 10
-
-    if (countX + context.measureText(countText).width > context.canvas.width - 5) {
-      context.fillStyle = contrastColor(avgColor)
-      context.textAlign = 'right'
-      context.fillText(countText, BAR_X + barWidth - 10, textY)
-    } else {
-      context.fillStyle = 'rgba(0, 0, 0, 1)'
-      context.textAlign = 'left'
-      context.fillText(countText, countX, textY)
-    }
-
-    context.fillStyle = contrastColor(avgColor)
-    context.textAlign = 'left'
-
-    let name = row.name
-    const maxNameWidth = barWidth - 60
-    if (context.measureText(name).width > maxNameWidth) {
-      while (name.length && context.measureText(name + '...').width > maxNameWidth) name = name.slice(0, -1)
-      name += '...'
-    }
-    const nameX = BAR_X + 10
-    context.fillText(name, nameX, textY)
-
-    const userIcons = pick(icons, row.userId)
-    const iconSize = 40
-    await Promise.all(userIcons.map((base64, i) => drawImage(base64, (image) => {
-      const iconX = options.shouldMoveIconToBarEndLeft
-        ? BAR_X + barWidth - iconSize * (i + 1)
-        : nameX + context.measureText(name).width + iconSize * i + 5
-      context.drawImage(image, iconX, textY - 30, iconSize, iconSize)
-    })))
-  }
-
-  function averageColor(base64) {
-    return drawImage(base64, (image) => {
-      const buffer = document.createElement('canvas')
-      const bufferContext = buffer.getContext('2d', { willReadFrequently: true })
-      buffer.width = image.width
-      buffer.height = image.height
-      bufferContext.drawImage(image, 0, 0)
-      const { data } = bufferContext.getImageData(0, 0, image.width, image.height)
-      let r = 0, g = 0, b = 0
-      for (let i = 0; i < data.length; i += 4) { r += data[i]; g += data[i + 1]; b += data[i + 2] }
-      const count = data.length / 4
-      return toHex(~~(r / count), ~~(g / count), ~~(b / count))
-    }).then((color) => color || '#808080')
-  }
-
-  function toHex(r, g, b) {
-    return '#' + [r, g, b].map((v) => v.toString(16).padStart(2, '0')).join('')
-  }
-
-  function toRgb(hex) {
-    const value = parseInt(String(hex).replace('#', '').slice(0, 6), 16)
-    return { r: (value >> 16) & 255, g: (value >> 8) & 255, b: value & 255 }
-  }
-
-  /** 依据背景亮度挑一个读得清的前景色。 */
-  function contrastColor(hex) {
-    const { r, g, b } = toRgb(hex)
-    const brightness = (r * 299 + g * 587 + b * 114) / 1000 / 255
-    if (brightness <= 0.2 || brightness >= 0.8) return brightness >= 0.8 ? '#000000' : '#FFFFFF'
-    const hsl = rgbToHsl(r, g, b)
-    hsl.l = hsl.l < 0.5 ? hsl.l + 0.3 : hsl.l - 0.3
-    hsl.s = hsl.s < 0.5 ? hsl.s + 0.3 : hsl.s - 0.3
-    const rgb = hslToRgb(hsl.h, hsl.s, hsl.l)
-    return toHex(rgb.r, rgb.g, rgb.b)
-  }
-
-  function rgbToHsl(r, g, b) {
-    r /= 255; g /= 255; b /= 255
-    const max = Math.max(r, g, b), min = Math.min(r, g, b)
-    const l = (max + min) / 2
-    if (max === min) return { h: 0, s: 0, l }
-    const d = max - min
-    const s = l > 0.5 ? d / (2 - max - min) : d / (max + min)
-    const h = (max === r ? (g - b) / d + (g < b ? 6 : 0) : max === g ? (b - r) / d + 2 : (r - g) / d + 4) / 6
-    return { h, s, l }
-  }
-
-  function hslToRgb(h, s, l) {
-    if (s === 0) return { r: Math.round(l * 255), g: Math.round(l * 255), b: Math.round(l * 255) }
-    const q = l < 0.5 ? l * (1 + s) : l + s - l * s
-    const p = 2 * l - q
-    const channel = (t) => {
-      if (t < 0) t += 1
-      if (t > 1) t -= 1
-      if (t < 1 / 6) return p + (q - p) * 6 * t
-      if (t < 1 / 2) return q
-      if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6
-      return p
-    }
-    return {
-      r: Math.round(channel(h + 1 / 3) * 255),
-      g: Math.round(channel(h) * 255),
-      b: Math.round(channel(h - 1 / 3) * 255),
-    }
-  }
-}`
-
+/**
+ * 样式 2：带头像的水平条形榜。
+ *
+ * 每行的条色由头像主色推出，但只借它的色相——色调和彩度都换成设计系统的取值。
+ * 这样既保留了「这条是我的颜色」，整张图的明暗节奏又是齐的，
+ * 不会因为谁的头像特别暗而糊掉，文字对比度也始终够。
+ */
 export function renderChart(title: string, subtitle: string, rows: ChartRow[], icons: Asset[], backgrounds: Asset[], options: ChartOptions) {
-  // 昵称是用户可控内容，转义 `<` 以免提前闭合 <script>
-  const payload = JSON.stringify({ rows, icons, backgrounds, options }).replace(/</g, '\\u003c')
+  const top = rows.reduce((max, row) => Math.max(max, row.count), 0) || 1
+
+  const items = rows.map((row, index) => {
+    const accent = harmonize(row.accent || '#808080', 48, 46, HUE)
+    const ratio = Math.max(BAR_MIN, row.count / top)
+
+    // 分数低的人条很短，名字塞进去只会被截断；放到条外面用正文色写，反而读得清
+    const needed = [...row.name].length * 19 + 40
+    const inside = ratio * TRACK_WIDTH >= needed
+
+    const chosen = pick(backgrounds, row.userId)
+    const background = chosen.length ? chosen[Math.floor(Math.random() * chosen.length)] : ''
+    // 整行铺底与条内铺底是两层独立的不透明度，配置里分开控制
+    const fullLayer = background && options.horizontalBarBackgroundFullOpacity > 0
+      ? `<span class="wash" style="background-image:${dataUrl(background)};opacity:${options.horizontalBarBackgroundFullOpacity}"></span>`
+      : ''
+    const barLayer = background
+      ? `<span class="wash" style="background-image:${dataUrl(background)};opacity:${options.horizontalBarBackgroundOpacity}"></span>`
+      : ''
+
+    const badges = pick(icons, row.userId)
+      .map((base64) => `<img class="icon" src="data:image/png;base64,${base64}">`).join('')
+
+    return `
+      <li class="row">
+        <span class="m3-badge ${index < 3 ? ['m3-badge--gold', 'm3-badge--silver', 'm3-badge--bronze'][index] : ''}">${index + 1}</span>
+        <img class="avatar" src="data:image/png;base64,${row.avatarBase64}">
+        <span class="track">
+          ${fullLayer}
+          <span class="bar" style="width:${(ratio * 100).toFixed(2)}%;background:${accent}">
+            ${barLayer}
+            <span class="label">
+              ${inside ? `<span class="who">${h.escape(row.name)}</span>` : ''}
+              ${options.shouldMoveIconToBarEndLeft ? '' : badges}
+            </span>
+            ${options.shouldMoveIconToBarEndLeft ? `<span class="tail">${badges}</span>` : ''}
+          </span>
+          ${inside ? '' : `<span class="who who--outside" style="left:calc(${(ratio * 100).toFixed(2)}% + 12px)">${h.escape(row.name)}</span>`}
+        </span>
+        <span class="count">${row.count}</span>
+      </li>`
+  }).join('')
+
   return `<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <title>排行榜</title>
+  <title>${h.escape(title)}</title>
   <style>
-    html { min-height: 100%; background: linear-gradient(135deg, #f6f8f9 0%, #e5ebee 100%); }
-    body { margin: 0; padding: 20px; box-sizing: border-box; font-family: "Microsoft YaHei", sans-serif; }
-    h1 { text-align: center; margin: 0 0 20px; color: #333; font-size: 24px; }
+    ${baseline(SCHEME)}${components()}
+    body { padding: 32px 28px 28px; width: 1080px; }
+
+    .m3-list { gap: 6px; }
+    .row {
+      display: flex; align-items: center; gap: 14px;
+      height: ${ROW_HEIGHT}px; padding: 0 16px 0 12px;
+      border-radius: ${SHAPE.large}px;
+      background: var(--md-sys-color-surface-container);
+    }
+    .avatar {
+      width: ${AVATAR}px; height: ${AVATAR}px; flex: none;
+      border-radius: var(--md-sys-shape-corner-full); object-fit: cover;
+      background: var(--md-sys-color-surface-container-highest);
+    }
+
+    /* 轨道与条都是全圆角；条压在轨道左端，超出的部分裁掉 */
+    .track {
+      position: relative; flex: 1; min-width: 0; height: ${AVATAR}px;
+      border-radius: var(--md-sys-shape-corner-full);
+      background: var(--md-sys-color-surface-container-highest);
+      overflow: hidden;
+    }
+    .bar {
+      position: relative; display: flex; align-items: center; justify-content: space-between;
+      height: 100%; min-width: ${AVATAR}px; padding: 0 16px;
+      border-radius: var(--md-sys-shape-corner-full);
+      overflow: hidden;
+    }
+    /* 自定义背景图铺在条上，盖不住的地方仍是头像主色 */
+    .wash {
+      position: absolute; inset: 0;
+      background-size: cover; background-position: center;
+    }
+    .label { position: relative; display: flex; align-items: center; gap: 6px; min-width: 0; }
+    .who {
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      font-size: 18px; line-height: 24px; font-weight: 600; letter-spacing: .1px;
+      color: #fff; text-shadow: 0 1px 3px rgba(0, 0, 0, .45);
+    }
+    /* 条外的名字写在轨道上，换成正文色，不需要投影 */
+    .who--outside {
+      position: absolute; top: 50%; right: 12px; transform: translateY(-50%);
+      color: var(--md-sys-color-on-surface-variant); text-shadow: none;
+    }
+    .tail { position: relative; display: flex; align-items: center; gap: 4px; }
+    .icon { width: 32px; height: 32px; object-fit: contain; }
+
+    .count {
+      flex: none; min-width: 108px; text-align: right;
+      font-size: 20px; line-height: 28px; font-weight: 600; font-variant-numeric: tabular-nums;
+      color: var(--md-sys-color-on-surface);
+    }
   </style>
 </head>
 <body>
-  <h1>${subtitle}</h1>
-  <h1>${title}</h1>
-  <canvas id="rankingCanvas"></canvas>
-  <script>(async () => { await (${CLIENT_SCRIPT})(${payload}) })()</script>
+  <div class="m3-header">
+    <h1 class="m3-header__title">${h.escape(title)}</h1>
+    <p class="m3-header__support">${h.escape(subtitle)}</p>
+  </div>
+  <ul class="m3-list">${items}
+  </ul>
 </body>
 </html>`
 }
