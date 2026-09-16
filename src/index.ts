@@ -24,8 +24,8 @@ export const usage = `## 使用
 | 指令 | 说明 |
 | --- | --- |
 | \`mrank\` | 帮助 |
-| \`mrank.本群榜 [数量]\` | 本群排行榜 |
-| \`mrank.跨群榜 [数量]\` | 跨群排行榜 |
+| \`mrank.本群排行榜 [数量]\` | 本群排行榜 |
+| \`mrank.跨群排行榜 [数量]\` | 跨群排行榜 |
 | \`mrank.查询 [@某人]\` | 查询货币余额 |
 
 用 \`-c <货币种类>\` 可以临时指定货币。`
@@ -147,8 +147,7 @@ export function apply(ctx: Context, config: Config) {
     .action(({ session }) => session.execute('help mrank'))
 
   // 指令主名取短的，长名保留为别名，老用户输入不受影响。
-  cmd.subcommand('.本群榜 [count:posint]', '查看本群排行榜')
-    .alias('mrank.本群个人货币排行榜')
+  cmd.subcommand('.本群排行榜 [count:posint]', '查看本群排行榜')
     .option('currency', '-c <currency:string> 指定货币种类')
     .action(async ({ session, options }, count) => {
       const limit = count || config.defaultLeaderboardDisplayCount
@@ -157,8 +156,7 @@ export function apply(ctx: Context, config: Config) {
         await channelRank(ctx, session.platform, session.channelId, currency, limit))
     })
 
-  cmd.subcommand('.跨群榜 [count:posint]', '查看跨群排行榜')
-    .alias('mrank.跨群个人货币排行榜')
+  cmd.subcommand('.跨群排行榜 [count:posint]', '查看跨群排行榜')
     .option('currency', '-c <currency:string> 指定货币种类')
     .action(async ({ session, options }, count) => {
       const limit = count || config.defaultLeaderboardDisplayCount
@@ -168,7 +166,6 @@ export function apply(ctx: Context, config: Config) {
     })
 
   cmd.subcommand('.查询 [target:user]', '查询货币余额')
-    .alias('mrank.查询货币')
     .option('currency', '-c <currency:string> 指定货币种类')
     .action(async ({ session, options }, target) => {
       const userId = target ? target.split(':')[1] : session.userId
