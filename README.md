@@ -1,6 +1,6 @@
 # koishi-plugin-monetary-rank
 
-货币排行榜
+通用货币排行榜 · 本频道与跨频道榜单，以及余额查询
 
 ## 安装
 
