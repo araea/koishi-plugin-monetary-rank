@@ -24,9 +24,9 @@ export const usage = `## 使用
 | 指令 | 说明 |
 | --- | --- |
 | \`mrank\` | 帮助 |
-| \`mrank.本群榜 [数量]\` | 本群排行 |
-| \`mrank.跨群榜 [数量]\` | 跨群排行 |
-| \`mrank.查询 [@某人]\` | 余额 |
+| \`mrank.本群榜 [数量]\` | 本群排行榜 |
+| \`mrank.跨群榜 [数量]\` | 跨群排行榜 |
+| \`mrank.查询 [@某人]\` | 查询货币余额 |
 
 用 \`-c <货币种类>\` 可以临时指定货币。`
 
@@ -101,7 +101,7 @@ export function apply(ctx: Context, config: Config) {
   }
 
   async function present(session: Session, title: string, currency: string, rows: RankEntry[]) {
-    if (!rows.length) return '⚠️ 暂无数据。'
+    if (!rows.length) return '📋 排行榜还空着\n这里按余额排名，有人持有货币后就会出现。'
     if (!config.isLeaderboardDisplayedAsImage || !ctx.puppeteer) {
       // 昵称可能带尖括号，用 h.text 包住避免被当成消息元素解析
       return h.text([`${title}：`, ...rows.map((row, index) =>
@@ -138,7 +138,7 @@ export function apply(ctx: Context, config: Config) {
       return h.image(await screenshot(html, { fit: true }), 'image/png')
     } catch (error) {
       logger.error('生成排行榜图片失败：%s', error.stack || error.message)
-      return '❌ 生成排行榜图片失败，请查看后台日志。'
+      return '❌ 排行榜图片没能生成\n详细原因见后台日志，稍后再试一次。'
     }
   }
 
@@ -147,7 +147,7 @@ export function apply(ctx: Context, config: Config) {
     .action(({ session }) => session.execute('help mrank'))
 
   // 指令主名取短的，长名保留为别名，老用户输入不受影响。
-  cmd.subcommand('.本群榜 [count:posint]', '查看本群排行')
+  cmd.subcommand('.本群榜 [count:posint]', '查看本群排行榜')
     .alias('mrank.本群个人货币排行榜')
     .option('currency', '-c <currency:string> 指定货币种类')
     .action(async ({ session, options }, count) => {
@@ -157,7 +157,7 @@ export function apply(ctx: Context, config: Config) {
         await channelRank(ctx, session.platform, session.channelId, currency, limit))
     })
 
-  cmd.subcommand('.跨群榜 [count:posint]', '查看跨群排行')
+  cmd.subcommand('.跨群榜 [count:posint]', '查看跨群排行榜')
     .alias('mrank.跨群个人货币排行榜')
     .option('currency', '-c <currency:string> 指定货币种类')
     .action(async ({ session, options }, count) => {
@@ -173,7 +173,7 @@ export function apply(ctx: Context, config: Config) {
     .action(async ({ session, options }, target) => {
       const userId = target ? target.split(':')[1] : session.userId
       const [binding] = await ctx.database.get('binding', { pid: userId, platform: session.platform })
-      if (!binding) return '⚠️ 未找到该用户的账户信息。'
+      if (!binding) return '💡 这个用户还没有账户\n货币账户由 `bind` 插件在首次绑定时创建。'
 
       const who = userId === session.userId ? '你' : h.at(userId)
       const records = await ctx.database.get('monetary', options.currency
@@ -182,7 +182,7 @@ export function apply(ctx: Context, config: Config) {
 
       if (!records.length) {
         return options.currency
-          ? [who, ` 没有「${options.currency}」的记录。`]
+          ? [who, ` 还没有「${options.currency}」的记录。`]
           : [who, ' 还没有任何货币记录。']
       }
       if (records.length === 1) {
