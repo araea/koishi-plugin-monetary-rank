@@ -1,5 +1,5 @@
 import { h } from 'koishi'
-import { baseline, components, palettesOf, scheme } from './m3'
+import { baseline, components, EMPHASIZED_WEIGHT, FONT_STACK, MONO_STACK, palettesOf, scheme, TYPE } from './m3'
 import { RankEntry } from './model'
 
 /** 货币榜取金色主调；第三色改取 -60° 的赤铜，比 +60° 的绿更贴「钱」的语义。 */
@@ -12,6 +12,12 @@ const SCHEME = scheme(HUE, false, SOURCE)
  * 抬到色调 52 才是这个色相真正鲜亮的那一段。
  */
 const BAR = palettesOf(HUE, SOURCE).primary(52)
+
+/**
+ * 要对齐的读数（数额、名次）走等宽栈。
+ * 等宽栈里没有汉字，把正文栈接在后面，货币名这种非数字的字才不掉队。
+ */
+const NUM_FONT = `${MONO_STACK},${FONT_STACK}`
 
 /** 名次前三用主 / 次 / 第三色的徽章，之后退回中性色，视线只落在头部。 */
 const BADGE = ['m3-badge--gold', 'm3-badge--silver', 'm3-badge--bronze']
@@ -40,18 +46,24 @@ export function renderCard(title: string, rows: RankEntry[], currency: string) {
     ${baseline(SCHEME)}${components()}
     body { padding: 28px 24px 24px; }
     .m3-list-item { min-height: 52px; gap: 12px; }
+    /* 名次是一列上下对齐的数字，徽章走等宽栈 */
+    .m3-badge { font-family: ${NUM_FONT}; }
     .name {
       flex: 0 0 auto; max-width: 168px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-      font-size: 16px; line-height: 24px; font-weight: 600; letter-spacing: .15px;
+      font-size: ${TYPE.titleMedium.size}px; line-height: ${TYPE.titleMedium.line}px;
+      font-weight: ${EMPHASIZED_WEIGHT.title}; letter-spacing: ${TYPE.titleMedium.tracking}px;
     }
     .m3-bar { flex: 1 1 auto; min-width: 72px; }
     .value {
       flex: none; min-width: 72px; text-align: right;
-      font-size: 16px; line-height: 24px; font-weight: 600; font-variant-numeric: tabular-nums;
+      font-family: ${NUM_FONT};
+      font-size: ${TYPE.titleMedium.size}px; line-height: ${TYPE.titleMedium.line}px;
+      font-weight: ${EMPHASIZED_WEIGHT.title}; font-variant-numeric: tabular-nums;
     }
     .value::after {
       content: " ${h.escape(currency)}"; margin-left: 2px;
-      font-size: 11px; font-weight: 600; letter-spacing: .5px; opacity: .6;
+      font-size: ${TYPE.labelSmall.size}px; font-weight: ${EMPHASIZED_WEIGHT.label};
+      letter-spacing: ${TYPE.labelSmall.tracking}px; opacity: .6;
     }
   </style>
 </head>

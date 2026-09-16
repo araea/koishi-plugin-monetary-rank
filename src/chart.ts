@@ -1,6 +1,6 @@
 import { h } from 'koishi'
 import { Asset } from './assets'
-import { baseline, harmonize, scheme } from './m3'
+import { baseline, EMPHASIZED_WEIGHT, FONT_STACK, harmonize, lch, MONO_STACK, scheme, TYPE } from './m3'
 
 /*
  * 柱状榜的源色相跟 message-counter 走，不跟本插件的卡片样式走。
@@ -17,6 +17,7 @@ const SCHEME = scheme(HUE)
  * 版式与 message-counter 的水平柱状榜逐项对齐：两个插件的榜单会在同一个群里
  * 前后脚发出来，行高、条长、字号只要差一点，并排看就是两张图。
  * 下面这组数值是从那边照搬的，改动时请两边一起改。
+ * 两处字号取字阶：数额是每行的一号数字，走 headlineLarge；占比退一档，走 bodyLarge。
  */
 const LAYOUT = {
   avatarSize: 52, // 头像边长，也是每一行的高度
@@ -28,17 +29,26 @@ const LAYOUT = {
   textEndPad: 16, // 数额距轨道右端的最小留白
   rightPad: 26, // 页面右侧留白
   namePad: 18, // 名称距柱状条左端的距离
-  countFontSize: 30, // 数额字号
-  percentFontSize: 19, // 百分比字号，比数额小一号
+  countFontSize: TYPE.headlineLarge.size, // 数额字号
+  percentFontSize: TYPE.bodyLarge.size, // 百分比字号，比数额小两档
   percentGap: 9, // 数额与百分比之间的空隙
   pagePadX: 28,
   pagePadY: 32,
   iconSize: 32,
 } as const
 
-/** 形状刻度：条与头像都取行高的一半，也就是全圆角。 */
-const RADIUS = LAYOUT.avatarSize / 2
+/**
+ * 形状刻度：条、轨道与头像都取全圆角（SHAPE 的 full 档），在 52px 的行高上
+ * 就是行高的一半，两端收成圆头。
+ * 下面这条是条的起点：头像宽度加一道头像与条之间的空隙。
+ */
 const BAR_X = LAYOUT.avatarSize + LAYOUT.avatarGap
+
+/**
+ * 要对齐的读数（数额、占比）走等宽栈。
+ * 等宽栈里没有汉字，把正文栈接在后面，读数里可能夹的字才不掉队。
+ */
+const NUM_FONT = `${MONO_STACK},${FONT_STACK}`
 
 /*
  * 同一支色相里的四个色调，取值与 message-counter 一致：
@@ -46,6 +56,13 @@ const BAR_X = LAYOUT.avatarSize + LAYOUT.avatarGap
  * 不必逐行判断该配深字还是浅字。
  */
 const TONE = { bar: 48, track: 93, value: 32, percent: 54 } as const
+
+/**
+ * 取不到头像主色时的兜底色：一支真正的灰（彩度 0）。
+ * harmonize 见到彩度低于 4 的来源就退回主色相，行色仍然落在设计系统里，
+ * 不会在报错路径上露出一支系统外的颜色。
+ */
+const GRAY = lch(50, 0, HUE)
 
 export interface ChartRow {
   name: string
@@ -134,7 +151,7 @@ export function renderChart(title: string, subtitle: string, rows: ChartRow[], i
   ).join('')
 
   const items = rows.map((row, index) => {
-    const source = row.accent || '#808080'
+    const source = row.accent || GRAY
     const accent = harmonize(source, TONE.bar, 46, HUE)
     const track = harmonize(source, TONE.track, 12, HUE)
     const valueInk = harmonize(source, TONE.value, 30, HUE)
@@ -207,12 +224,14 @@ export function renderChart(title: string, subtitle: string, rows: ChartRow[], i
     .head { margin: 0 0 28px; padding-left: 2px; }
     .head h1 {
       margin: 0;
-      font-size: 36px; line-height: 44px; font-weight: 600; letter-spacing: 0;
+      font-size: ${TYPE.displaySmall.size}px; line-height: ${TYPE.displaySmall.line}px;
+      font-weight: ${EMPHASIZED_WEIGHT.display}; letter-spacing: ${TYPE.displaySmall.tracking}px;
       color: ${SCHEME.onSurface};
     }
     .head p {
       margin: 8px 0 0;
-      font-size: 14px; line-height: 20px; font-weight: 400; letter-spacing: .25px;
+      font-size: ${TYPE.bodyMedium.size}px; line-height: ${TYPE.bodyMedium.line}px;
+      font-weight: ${TYPE.bodyMedium.weight}; letter-spacing: ${TYPE.bodyMedium.tracking}px;
       color: ${SCHEME.onSurfaceVariant};
     }
     /* 分隔点自己带匀称的左右间距，不依赖字体里「·」的空腔 */
@@ -223,7 +242,7 @@ export function renderChart(title: string, subtitle: string, rows: ChartRow[], i
 
     .avatar {
       width: ${LAYOUT.avatarSize}px; height: ${LAYOUT.avatarSize}px; flex: none;
-      border-radius: ${RADIUS}px; object-fit: cover;
+      border-radius: var(--md-sys-shape-corner-full); object-fit: cover;
       background: ${SCHEME.surfaceContainerHighest};
     }
 
@@ -231,19 +250,19 @@ export function renderChart(title: string, subtitle: string, rows: ChartRow[], i
     .track {
       position: relative; flex: none;
       width: ${trackWidth}px; height: ${LAYOUT.avatarSize}px;
-      border-radius: ${RADIUS}px;
+      border-radius: var(--md-sys-shape-corner-full);
       overflow: hidden;
     }
 
     /* 刻度线压在实色条下面，文字始终在最上层 */
     .ticks { position: absolute; inset: 0; }
-    .ticks i { position: absolute; top: 0; bottom: 0; width: 2px; background: rgba(0, 0, 0, .08); }
+    .ticks i { position: absolute; top: 0; bottom: 0; width: 2px; background: ${SCHEME.outlineVariant}; }
 
     .bar {
       position: absolute; left: 0; top: 0; bottom: 0;
       display: flex; align-items: center;
       padding-left: ${LAYOUT.namePad}px;
-      border-radius: ${RADIUS}px;
+      border-radius: var(--md-sys-shape-corner-full);
       overflow: hidden;
     }
     /* 自定义背景图铺在条上，盖不住的地方仍是头像主色 */
@@ -252,8 +271,9 @@ export function renderChart(title: string, subtitle: string, rows: ChartRow[], i
     .name {
       position: relative;
       overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-      font-size: ${LAYOUT.countFontSize}px; line-height: ${LAYOUT.avatarSize}px; font-weight: 400;
-      color: #fff; text-shadow: 0 1px 3px rgba(0, 0, 0, .45);
+      font-size: ${TYPE.headlineLarge.size}px; line-height: ${LAYOUT.avatarSize}px;
+      font-weight: ${TYPE.headlineLarge.weight};
+      color: ${SCHEME.onPrimary}; text-shadow: 0 1px 3px rgba(0, 0, 0, .45);
     }
 
     .tail { position: absolute; z-index: 2; top: 50%; transform: translate(-100%, -50%); display: flex; align-items: center; gap: 4px; }
@@ -262,9 +282,11 @@ export function renderChart(title: string, subtitle: string, rows: ChartRow[], i
     .value {
       position: absolute; z-index: 2; top: 50%; transform: translateY(-50%);
       display: flex; align-items: baseline; gap: ${LAYOUT.percentGap}px;
-      font-size: ${LAYOUT.countFontSize}px; line-height: 1; font-weight: 400; white-space: nowrap;
+      font-family: ${NUM_FONT}; font-variant-numeric: tabular-nums;
+      font-size: ${TYPE.headlineLarge.size}px; line-height: 1;
+      font-weight: ${TYPE.headlineLarge.weight}; white-space: nowrap;
     }
-    .value b { font-size: ${LAYOUT.percentFontSize}px; font-weight: 400; }
+    .value b { font-size: ${TYPE.bodyLarge.size}px; font-weight: ${TYPE.bodyLarge.weight}; }
   </style>
 </head>
 <body>

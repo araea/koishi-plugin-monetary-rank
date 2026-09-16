@@ -100,12 +100,24 @@ export function apply(ctx: Context, config: Config) {
     }
   }
 
+  /**
+   * 文本榜单。整条消息五行封顶：标题一行，内容最多四行，更多时压到三行并留一行尾注。
+   * 昵称可能带尖括号，用 h.text 包住避免被当成消息元素解析。
+   */
+  function textBoard(title: string, rows: RankEntry[]) {
+    const shown = rows.length > 4 ? rows.slice(0, 3) : rows
+    const hidden = rows.length - shown.length
+    return h.text([
+      `📋 ${title}`,
+      ...shown.map((row, index) => `${index + 1}. ${row.username}（${row.userId}） · ${row.value}`),
+      hidden > 0 ? `…… 另有 ${hidden} 人未列` : null,
+    ].filter(Boolean).join('\n'))
+  }
+
   async function present(session: Session, title: string, currency: string, rows: RankEntry[]) {
-    if (!rows.length) return '📋 排行榜还空着\n这里按余额排名，有人持有货币后就会出现。'
+    if (!rows.length) return '📋 排行榜还空着\n这里按余额排名，有人持有货币后就会出现。\n发送「mrank.查询」看自己的余额。'
     if (!config.isLeaderboardDisplayedAsImage || !ctx.puppeteer) {
-      // 昵称可能带尖括号，用 h.text 包住避免被当成消息元素解析
-      return h.text([`${title}：`, ...rows.map((row, index) =>
-        `${index + 1}. ${row.username}（${row.userId}） - ${row.value}`)].join('\n'))
+      return textBoard(title, rows)
     }
 
     try {
@@ -138,7 +150,7 @@ export function apply(ctx: Context, config: Config) {
       return h.image(await screenshot(html, { fit: true }), 'image/png')
     } catch (error) {
       logger.error('生成排行榜图片失败：%s', error.stack || error.message)
-      return '❌ 排行榜图片没能生成\n详细原因见后台日志，稍后再试一次。'
+      return textBoard(title, rows)
     }
   }
 
@@ -169,22 +181,29 @@ export function apply(ctx: Context, config: Config) {
     .option('currency', '-c <currency:string> 指定货币种类')
     .action(async ({ session, options }, target) => {
       const userId = target ? target.split(':')[1] : session.userId
+      // 查自己用「你」，查他人用 @；只有 @ 元素后面需要留一个空格。
+      const who = userId === session.userId ? ['你'] : [h.at(userId), ' ']
       const [binding] = await ctx.database.get('binding', { pid: userId, platform: session.platform })
-      if (!binding) return '💡 这个用户还没有账户\n货币账户由 `bind` 插件在首次绑定时创建。'
+      if (!binding) {
+        return ['💡 ', ...who, '还没有账户\n货币账户由 `bind` 插件在首次绑定时创建。\n发送「bind」绑定后，余额就会出现在这里。']
+      }
 
-      const who = userId === session.userId ? '你' : h.at(userId)
       const records = await ctx.database.get('monetary', options.currency
         ? { uid: binding.aid, currency: options.currency }
         : { uid: binding.aid })
 
       if (!records.length) {
         return options.currency
-          ? [who, ` 还没有「${options.currency}」的记录。`]
-          : [who, ' 还没有任何货币记录。']
+          ? ['💡 ', ...who, `还没有「${options.currency}」的记录。`]
+          : ['💡 ', ...who, '还没有任何货币记录。']
       }
       if (records.length === 1) {
-        return [who, ` 的 ${records[0].currency} 余额为 ${records[0].value}。`]
+        return ['📋 ', ...who, `的 ${records[0].currency} 余额为 ${records[0].value}。`]
       }
-      return [who, ' 的货币余额：\n', records.map((row) => `${row.currency}：${row.value}`).join('\n')]
+      const lines = records.map((row) => `• ${row.currency}：${row.value}`)
+      const shown = lines.length > 4 ? lines.slice(0, 3) : lines
+      const hidden = lines.length - shown.length
+      const body = shown.join('\n') + (hidden > 0 ? `\n…… 另有 ${hidden} 种未列` : '')
+      return ['📋 ', ...who, '的货币余额：\n', body]
     })
 }
