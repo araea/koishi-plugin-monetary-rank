@@ -31,6 +31,32 @@ export function readAssets(ctx: Context, folder: string): Asset[] {
   }
 }
 
+/**
+ * 昵称与读数用的字体。
+ *
+ * message-counter 的行内文字走它随包带的 `HarmonyOS_Sans_Medium`（用户可以在
+ * 那边换成别的字体，默认就是这一支）。两个插件的榜单会在同一个群里前后脚出现，
+ * 字体不同一眼就是两张图，所以这里把同一支字体读进来、内联成 @font-face。
+ * 取不到就退回页面字体栈，不报错——这个文件由 message-counter 在启动时铺好，
+ * 没装它的时候图表仍然出得来。
+ */
+export const NICKNAME_FONT = 'HarmonyOS_Sans_Medium'
+const NICKNAME_FONT_FILE = 'HarmonyOS_Sans_Medium.ttf'
+
+let fontFaceCache = ''
+
+export function nicknameFontFace(ctx: Context): string {
+  if (fontFaceCache) return fontFaceCache
+  const file = path.join(ctx.baseDir, 'data', 'messageCounter', 'fonts', NICKNAME_FONT_FILE)
+  try {
+    const base64 = fs.readFileSync(file).toString('base64')
+    fontFaceCache = `@font-face{font-family:'${NICKNAME_FONT}';src:url('data:font/ttf;base64,${base64}') format('truetype')}`
+    return fontFaceCache
+  } catch {
+    return ''
+  }
+}
+
 /** 头像加载结果：base64 图与一枚用于配色的主色。 */
 export interface Avatar {
   base64: string

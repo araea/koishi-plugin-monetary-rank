@@ -1,7 +1,7 @@
 import { Context, h, Session } from 'koishi'
 import {} from 'koishi-plugin-puppeteer'
 import {} from '@koishijs/canvas'
-import { createAvatarLoader, readAssets } from './assets'
+import { createAvatarLoader, nicknameFontFace, readAssets } from './assets'
 import { renderCard } from './card'
 import { renderChart } from './chart'
 import { Config } from './config'
@@ -88,6 +88,11 @@ export function apply(ctx: Context, config: Config) {
     try {
       await page.setViewport({ width, height: 256, deviceScaleFactor: scale })
       await page.setContent(html, { waitUntil: config.waitUntil })
+      // 昵称字体是内联的 @font-face，加载完再量宽度、再截图；
+      // 量早了会按回退字体算，轨道右侧的留白就不对了
+      await page.evaluate(async () => {
+        await (document as any).fonts?.ready
+      })
       if (fit) {
         const measured = await page.evaluate(() => document.body.scrollWidth)
         if (measured > 0) {
@@ -146,7 +151,7 @@ export function apply(ctx: Context, config: Config) {
         horizontalBarBackgroundOpacity: config.horizontalBarBackgroundOpacity,
         horizontalBarBackgroundFullOpacity: config.horizontalBarBackgroundFullOpacity,
         shouldMoveIconToBarEndLeft: config.shouldMoveIconToBarEndLeft,
-      })
+      }, nicknameFontFace(ctx))
       return h.image(await screenshot(html, { fit: true }), 'image/png')
     } catch (error) {
       logger.error('生成排行榜图片失败：%s', error.stack || error.message)

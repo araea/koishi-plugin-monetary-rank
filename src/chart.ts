@@ -1,6 +1,6 @@
 import { h } from 'koishi'
-import { Asset } from './assets'
-import { baseline, EMPHASIZED_WEIGHT, FONT_STACK, harmonize, lch, MONO_STACK, scheme, TYPE } from './m3'
+import { Asset, NICKNAME_FONT } from './assets'
+import { baseline, EMPHASIZED_WEIGHT, harmonize, lch, MONO_STACK, scheme, SHAPE, TYPE } from './m3'
 
 /*
  * 柱状榜的源色相跟 message-counter 走，不跟本插件的卡片样式走。
@@ -14,48 +14,54 @@ const HUE = 268
 const SCHEME = scheme(HUE)
 
 /*
- * 版式与 message-counter 的水平柱状榜逐项对齐：两个插件的榜单会在同一个群里
+ * 版式与 message-counter 的水平柱状榜逐项对齐，两个插件的榜单会在同一个群里
  * 前后脚发出来，行高、条长、字号只要差一点，并排看就是两张图。
- * 下面这组数值是从那边照搬的，改动时请两边一起改。
- * 两处字号取字阶：数额是每行的一号数字，走 headlineLarge；占比退一档，走 bodyLarge。
+ * 这一组数值又都来自 ayjx 的 `draw_bar_chart`（那边以 2 倍尺寸绘制，这里是 1 倍）：
+ * 行高 50、条最短 150、随数额增长 700、名字左内缩 10、条尾到数额 10、
+ * 数额与占比之间 8。改动时三处一起改。
+ * 两处字号取字阶：数额是每行的一号数字，走 headlineLarge；占比退到 titleLarge，
+ * 与数额保持 2:3。
  */
 const LAYOUT = {
-  avatarSize: 52, // 头像边长，也是每一行的高度
+  avatarSize: 50, // 头像边长，也是每一行的高度
   rowGap: 10, // 行与行之间的空隙
-  avatarGap: 14, // 头像与柱状条之间的空隙
+  avatarGap: 6, // 头像与柱状条之间的空隙
   barMinWidth: 150, // 柱状条的最小长度
   barSpan: 700, // 柱状条随数额增长的最大长度
-  textGap: 16, // 柱状条末端与数额之间的空隙
-  textEndPad: 16, // 数额距轨道右端的最小留白
-  rightPad: 26, // 页面右侧留白
-  namePad: 18, // 名称距柱状条左端的距离
+  namePad: 10, // 名称距柱状条左端的距离
+  textGap: 10, // 柱状条末端与数额之间的空隙
   countFontSize: TYPE.headlineLarge.size, // 数额字号
-  percentFontSize: TYPE.bodyLarge.size, // 百分比字号，比数额小两档
-  percentGap: 9, // 数额与百分比之间的空隙
-  pagePadX: 28,
-  pagePadY: 32,
+  percentFontSize: TYPE.titleLarge.size, // 百分比字号
+  percentGap: 8, // 数额与百分比之间的空隙
+  pagePadX: 24,
+  pagePadY: 24,
   iconSize: 32,
 } as const
 
 /**
- * 形状刻度：条、轨道与头像都取全圆角（SHAPE 的 full 档），在 52px 的行高上
- * 就是行高的一半，两端收成圆头。
- * 下面这条是条的起点：头像宽度加一道头像与条之间的空隙。
+ * 形状刻度：条是条高的两成（50 的 20% = 10，SHAPE 里最近的一档是 medium = 12），
+ * 头像与轨道取全圆角。下面这条是条的起点：头像宽度加一道头像与条之间的空隙。
  */
+const BAR_RADIUS = SHAPE.medium
+const TRACK_WIDTH = LAYOUT.barMinWidth + LAYOUT.barSpan
 const BAR_X = LAYOUT.avatarSize + LAYOUT.avatarGap
 
 /**
- * 要对齐的读数（数额、占比）走等宽栈。
- * 等宽栈里没有汉字，把正文栈接在后面，读数里可能夹的字才不掉队。
+ * 要对齐的读数（数额、占比）走等宽栈，昵称走 message-counter 那一支字体。
+ * 两个字体栈逐项照搬 message-counter 的 numFont / chartFont：同一份数据在两个
+ * 插件里必须落到同一支字体上。
+ * 等宽栈里没有汉字，把昵称字体接在后面，读数里可能夹的字才不掉队。
  */
-const NUM_FONT = `${MONO_STACK},${FONT_STACK}`
+const NAME_FONT = `'${NICKNAME_FONT}', "Microsoft YaHei", sans-serif`
+const NUM_FONT = `${MONO_STACK}, ${NAME_FONT}`
 
 /*
  * 同一支色相里的四个色调，取值与 message-counter 一致：
- * 条 48、轨道 93、数额 32、占比 54。条固定在色调 48，条上的白字永远够对比，
- * 不必逐行判断该配深字还是浅字。
+ * 条 48、轨道 73（彩度 23，条色与页面底色各半）、数额 32、占比 47（彩度 28）。
+ * 条固定在色调 48，条上的白字永远够对比，不必逐行判断该配深字还是浅字。
  */
-const TONE = { bar: 48, track: 93, value: 32, percent: 54 } as const
+const TONE = { bar: 48, track: 73, value: 32, percent: 47 } as const
+const CHROMA = { bar: 46, track: 23, value: 30, percent: 28 } as const
 
 /**
  * 取不到头像主色时的兜底色：一支真正的灰（彩度 0）。
@@ -91,6 +97,17 @@ const dataUrl = (base64: string) => `url('data:image/png;base64,${base64}')`
 const thousands = (value: number) => Number(value).toLocaleString('en-US')
 
 /**
+ * 占比文案：一律取整——一列数字里不夹小数点看着才干净；
+ * 不足半个百分点写 "<1%"，免得非零的零头被舍成没意义的 "0%"。
+ * 与 message-counter 的写法逐字相同，两张榜的数字读起来才是一套。
+ */
+function formatPercent(value: number, total: number) {
+  if (total <= 0 || value <= 0) return '0%'
+  const rounded = Math.round((value / total) * 100)
+  return rounded === 0 ? '<1%' : `${rounded}%`
+}
+
+/**
  * 估算一段数字文本的宽度。
  *
  * 榜单右侧只会出现数字、千分位逗号和百分号，用固定的字宽模型比把页面量一遍再
@@ -107,7 +124,7 @@ function textWidth(text: string, fontSize: number) {
 }
 
 const percentOf = (value: number, total: number) =>
-  total > 0 ? `${((value / total) * 100).toFixed(2)}%` : ''
+  total > 0 ? formatPercent(value, total) : ''
 
 /**
  * 样式 2：带头像的水平条形榜。
@@ -116,7 +133,7 @@ const percentOf = (value: number, total: number) =>
  * 这样既保留了「这条是我的颜色」，整张图的明暗节奏又是齐的，
  * 不会因为谁的头像特别暗而糊掉，文字对比度也始终够。
  */
-export function renderChart(title: string, subtitle: string, rows: ChartRow[], icons: Asset[], backgrounds: Asset[], options: ChartOptions) {
+export function renderChart(title: string, subtitle: string, rows: ChartRow[], icons: Asset[], backgrounds: Asset[], options: ChartOptions, fontFace = '') {
   // subtitle 由调用方拼好，内含 <span class="sep"> 分隔点，所以不整串转义；
   // 其中唯一的用户可控片段是货币名，调用方已经 h.escape 过
 
@@ -137,35 +154,31 @@ export function renderChart(title: string, subtitle: string, rows: ChartRow[], i
     }
   })
 
+  // 轨道是定长的：条最长就铺满它，数额写在轨道右侧的留白上，与 ayjx 一致。
+  // 页面宽度则按最长的那串数额撑开，读数不会溢出。
   const widest = blocks.reduce((max, block) => Math.max(max, block.width), 0)
-  const trackWidth = Math.ceil(
-    LAYOUT.barMinWidth + LAYOUT.barSpan + LAYOUT.textGap + widest + LAYOUT.textEndPad,
-  )
-  const pageWidth = BAR_X + trackWidth + LAYOUT.rightPad + LAYOUT.pagePadX * 2
+  const pageWidth = Math.ceil(BAR_X + TRACK_WIDTH + LAYOUT.textGap + widest + LAYOUT.pagePadX * 2)
 
-  // 刻度线：八道等距，自条的零点起一格一道，只刻在轨道里
+  // 刻度线：自条的零点起一格一道，只刻在轨道里；末道收在圆角之前
+  const tickStep = LAYOUT.barSpan / 7
+  const tickCount = Math.floor((LAYOUT.barSpan - BAR_RADIUS) / tickStep) + 1
   const ticks = Array.from(
-    { length: 8 },
-    (_, index) =>
-      `<i style="left:${LAYOUT.barMinWidth + (LAYOUT.barSpan / 7) * index}px"></i>`,
+    { length: tickCount },
+    (_, index) => `<i style="left:${LAYOUT.barMinWidth + tickStep * index}px"></i>`,
   ).join('')
 
   const items = rows.map((row, index) => {
     const source = row.accent || GRAY
-    const accent = harmonize(source, TONE.bar, 46, HUE)
-    const track = harmonize(source, TONE.track, 12, HUE)
-    const valueInk = harmonize(source, TONE.value, 30, HUE)
-    const percentInk = harmonize(source, TONE.percent, 20, HUE)
+    const accent = harmonize(source, TONE.bar, CHROMA.bar, HUE)
+    const track = harmonize(source, TONE.track, CHROMA.track, HUE)
+    const valueInk = harmonize(source, TONE.value, CHROMA.value, HUE)
+    const percentInk = harmonize(source, TONE.percent, CHROMA.percent, HUE)
 
     const barWidth = LAYOUT.barMinWidth + (LAYOUT.barSpan * row.count) / top
     const block = blocks[index]
 
-    // 放不下时贴着轨道右端，避免溢出页面
-    const trackRight = trackWidth
-    let textX = barWidth + LAYOUT.textGap
-    if (textX + block.width > trackRight - LAYOUT.textEndPad) {
-      textX = Math.max(LAYOUT.namePad, trackRight - LAYOUT.textEndPad - block.width)
-    }
+    // 读数紧跟条尾，落在轨道里或轨道外的纸面上，位置不跟着轨道右端变
+    const textX = BAR_X + barWidth + LAYOUT.textGap
 
     const chosen = pick(backgrounds, row.userId)
     const background = chosen.length ? chosen[Math.floor(Math.random() * chosen.length)] : ''
@@ -197,12 +210,12 @@ export function renderChart(title: string, subtitle: string, rows: ChartRow[], i
           ${options.shouldMoveIconToBarEndLeft && badges
             ? `<span class="tail" style="left:${(barWidth - LAYOUT.namePad / 2).toFixed(1)}px">${badges}</span>`
             : ''}
-          <span class="value" style="left:${textX.toFixed(1)}px;color:${valueInk}">${block.countText}${
-            block.percentText
-              ? `<b style="color:${percentInk}">${block.percentText}</b>`
-              : ''
-          }</span>
         </span>
+        <span class="value" style="left:${textX.toFixed(1)}px;color:${valueInk}">${block.countText}${
+          block.percentText
+            ? `<b style="color:${percentInk}">${block.percentText}</b>`
+            : ''
+        }</span>
       </li>`
   }).join('')
 
@@ -213,32 +226,34 @@ export function renderChart(title: string, subtitle: string, rows: ChartRow[], i
   <title>${h.escape(title)}</title>
   <style>
     ${baseline(SCHEME)}
+    ${fontFace}
     html { min-height: 100%; background: linear-gradient(135deg, ${SCHEME.surfaceBright} 0%, ${SCHEME.surfaceContainer} 100%); }
     body {
       width: ${pageWidth}px;
-      padding: ${LAYOUT.pagePadY}px ${LAYOUT.pagePadX}px ${LAYOUT.pagePadY + 8}px;
+      padding: ${LAYOUT.pagePadY}px ${LAYOUT.pagePadX}px;
       background: transparent;
     }
 
-    /* 页眉左对齐：标题与下面的榜单同一条起始线，比居中更稳 */
-    .head { margin: 0 0 28px; padding-left: 2px; }
+    /* 页眉居中：与 message-counter、ayjx 的榜单同一条版式——标题居中，
+       范围、合计与出图时间并成一行小字跟在下面。 */
+    .head { margin: 0 0 24px; text-align: center; }
     .head h1 {
       margin: 0;
-      font-size: ${TYPE.displaySmall.size}px; line-height: ${TYPE.displaySmall.line}px;
-      font-weight: ${EMPHASIZED_WEIGHT.display}; letter-spacing: ${TYPE.displaySmall.tracking}px;
+      font-size: ${TYPE.headlineLarge.size}px; line-height: ${TYPE.headlineLarge.line}px;
+      font-weight: ${EMPHASIZED_WEIGHT.headline}; letter-spacing: ${TYPE.headlineLarge.tracking}px;
       color: ${SCHEME.onSurface};
     }
     .head p {
-      margin: 8px 0 0;
-      font-size: ${TYPE.bodyMedium.size}px; line-height: ${TYPE.bodyMedium.line}px;
-      font-weight: ${TYPE.bodyMedium.weight}; letter-spacing: ${TYPE.bodyMedium.tracking}px;
+      margin: 12px 0 0;
+      font-size: ${TYPE.bodyLarge.size}px; line-height: ${TYPE.bodyLarge.line}px;
+      font-weight: ${TYPE.bodyLarge.weight}; letter-spacing: ${TYPE.bodyLarge.tracking}px;
       color: ${SCHEME.onSurfaceVariant};
     }
     /* 分隔点自己带匀称的左右间距，不依赖字体里「·」的空腔 */
     .head .sep { margin: 0 9px; opacity: .55; }
 
     .rows { display: flex; flex-direction: column; gap: ${LAYOUT.rowGap}px; margin: 0; padding: 0; list-style: none; }
-    .row { display: flex; align-items: center; gap: ${LAYOUT.avatarGap}px; height: ${LAYOUT.avatarSize}px; }
+    .row { position: relative; display: flex; align-items: center; gap: ${LAYOUT.avatarGap}px; height: ${LAYOUT.avatarSize}px; }
 
     .avatar {
       width: ${LAYOUT.avatarSize}px; height: ${LAYOUT.avatarSize}px; flex: none;
@@ -246,11 +261,11 @@ export function renderChart(title: string, subtitle: string, rows: ChartRow[], i
       background: ${SCHEME.surfaceContainerHighest};
     }
 
-    /* 轨道比最长的条还要宽出一截，数额就写在这段轨道上 */
+    /* 轨道定长：条最长就铺满它；条的圆角交给这层裁 */
     .track {
       position: relative; flex: none;
-      width: ${trackWidth}px; height: ${LAYOUT.avatarSize}px;
-      border-radius: var(--md-sys-shape-corner-full);
+      width: ${TRACK_WIDTH}px; height: ${LAYOUT.avatarSize}px;
+      border-radius: ${BAR_RADIUS}px;
       overflow: hidden;
     }
 
@@ -262,7 +277,6 @@ export function renderChart(title: string, subtitle: string, rows: ChartRow[], i
       position: absolute; left: 0; top: 0; bottom: 0;
       display: flex; align-items: center;
       padding-left: ${LAYOUT.namePad}px;
-      border-radius: var(--md-sys-shape-corner-full);
       overflow: hidden;
     }
     /* 自定义背景图铺在条上，盖不住的地方仍是头像主色 */
@@ -271,9 +285,10 @@ export function renderChart(title: string, subtitle: string, rows: ChartRow[], i
     .name {
       position: relative;
       overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      font-family: ${NAME_FONT};
       font-size: ${TYPE.headlineLarge.size}px; line-height: ${LAYOUT.avatarSize}px;
       font-weight: ${TYPE.headlineLarge.weight};
-      color: ${SCHEME.onPrimary}; text-shadow: 0 1px 3px rgba(0, 0, 0, .45);
+      color: ${SCHEME.onPrimary};
     }
 
     .tail { position: absolute; z-index: 2; top: 50%; transform: translate(-100%, -50%); display: flex; align-items: center; gap: 4px; }
@@ -286,7 +301,7 @@ export function renderChart(title: string, subtitle: string, rows: ChartRow[], i
       font-size: ${TYPE.headlineLarge.size}px; line-height: 1;
       font-weight: ${TYPE.headlineLarge.weight}; white-space: nowrap;
     }
-    .value b { font-size: ${TYPE.bodyLarge.size}px; font-weight: ${TYPE.bodyLarge.weight}; }
+    .value b { font-size: ${TYPE.titleLarge.size}px; font-weight: ${TYPE.titleLarge.weight}; }
   </style>
 </head>
 <body>
