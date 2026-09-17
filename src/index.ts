@@ -1,7 +1,7 @@
 import { Context, h, Session } from 'koishi'
 import {} from 'koishi-plugin-puppeteer'
 import {} from '@koishijs/canvas'
-import { createAvatarLoader, nicknameFontFace, readAssets } from './assets'
+import { createAvatarLoader, FALLBACK_AVATAR, measureAccents, nicknameFontFace, readAssets } from './assets'
 import { renderCard } from './card'
 import { renderChart } from './chart'
 import { Config } from './config'
@@ -139,6 +139,17 @@ export function apply(ctx: Context, config: Config) {
           accent: avatar.accent,
         }
       }))
+      // 没有 canvas 服务时主色没算出来，交给同一台浏览器补一遍；
+      // 兜底头像（没取到）不量，交给 FALLBACK_THEME
+      if (chartRows.some((row) => !row.accent && row.avatarBase64 !== FALLBACK_AVATAR)) {
+        const pending = chartRows.map((row) => (row.accent || row.avatarBase64 === FALLBACK_AVATAR ? '' : row.avatarBase64))
+        const measured = await measureAccents(ctx, pending.filter(Boolean))
+        let cursor = 0
+        for (const row of chartRows) {
+          if (row.accent || row.avatarBase64 === FALLBACK_AVATAR) continue
+          row.accent = measured[cursor++] || ''
+        }
+      }
       // 元信息行与 message-counter 的榜单同一种写法：范围、合计、出图时间
       const sum = chartRows.reduce((carry, row) => carry + row.count, 0)
       const stamp = new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })

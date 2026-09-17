@@ -8,7 +8,7 @@
 yarn add koishi-plugin-monetary-rank
 ```
 
-在 Koishi 配置中启用，并提供 database 与 monetary 服务。图表显示需要 puppeteer 与 canvas，资源与 message-counter 共用 `data/messageCounter/`。
+在 Koishi 配置中启用，并提供 database 与 monetary 服务。图表显示需要 puppeteer；有 canvas 服务时头像会先缩到 50×50 再缓存，没有也照常出图（缩略图与取主色都在浏览器端做）。资源与 message-counter 共用 `data/messageCounter/`。
 
 ## 指令
 
