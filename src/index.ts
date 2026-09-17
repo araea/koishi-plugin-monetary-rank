@@ -162,6 +162,7 @@ export function apply(ctx: Context, config: Config) {
         horizontalBarBackgroundOpacity: config.horizontalBarBackgroundOpacity,
         horizontalBarBackgroundFullOpacity: config.horizontalBarBackgroundFullOpacity,
         shouldMoveIconToBarEndLeft: config.shouldMoveIconToBarEndLeft,
+        gridLinesOverBars: config.gridLinesOverBars,
       }, nicknameFontFace(ctx))
       return h.image(await screenshot(html, { fit: true }), 'image/png')
     } catch (error) {

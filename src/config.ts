@@ -9,6 +9,7 @@ export interface Config {
   horizontalBarBackgroundFullOpacity?: number
   horizontalBarBackgroundOpacity?: number
   shouldMoveIconToBarEndLeft?: boolean
+  gridLinesOverBars?: boolean
 }
 
 export const Config: Schema<Config> = Schema.intersect([
@@ -39,6 +40,8 @@ export const Config: Schema<Config> = Schema.intersect([
           .description('（样式 2）自定义柱状条背景的不透明度。'),
         shouldMoveIconToBarEndLeft: Schema.boolean().default(true)
           .description('（样式 2）把自定义图标放在柱状条末端左侧，关闭则放在用户名右侧。'),
+        gridLinesOverBars: Schema.boolean().default(true)
+          .description('（样式 2）刻度竖线是否压在柱状条之上。开启（默认）则刻度贯穿整行；关闭则由柱状条盖住刻度，每根条是完整的一块颜色。两种都只差遮挡关系，文字始终在最上层。'),
       }),
       Schema.object({}),
     ]),

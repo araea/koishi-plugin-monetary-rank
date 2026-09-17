@@ -158,6 +158,8 @@ export interface ChartOptions {
   horizontalBarBackgroundOpacity: number
   horizontalBarBackgroundFullOpacity: number
   shouldMoveIconToBarEndLeft: boolean
+  /** 刻度竖线是否压在实色条之上；关闭则由实色条盖住刻度。文字始终在最上层。 */
+  gridLinesOverBars: boolean
 }
 
 const pick = (assets: Asset[], userId: string) =>
@@ -280,7 +282,7 @@ export function renderChart(title: string, subtitle: string, rows: ChartRow[], i
       <li class="row">
         <img class="avatar" src="data:image/png;base64,${row.avatarBase64}">
         <span class="track" style="background:${trackCss}">
-          <span class="ticks">${ticks}</span>
+          <span class="ticks${options.gridLinesOverBars ? ' ticks--over' : ''}">${ticks}</span>
           ${fullLayer}
           <span class="bar" style="width:${barWidth.toFixed(3)}px;background:${accent}">
             ${barLayer}
@@ -355,9 +357,12 @@ export function renderChart(title: string, subtitle: string, rows: ChartRow[], i
       overflow: hidden;
     }
 
-    /* 刻度线压在实色条下面，文字始终在最上层 */
+    /* 刻度线默认压在实色条上面；关掉 gridLinesOverBars 则被条盖住。
+       名字抬到刻度之上——文字始终在最上层，位置与字号两种都一样。 */
     .ticks { position: absolute; inset: 0; }
     .ticks i { position: absolute; top: 0; bottom: 0; width: 2px; background: ${HAIRLINE}; }
+    .ticks--over { z-index: 2; }
+    .ticks--over ~ .bar .name { z-index: 3; }
 
     .bar {
       position: absolute; left: 0; top: 0; bottom: 0;
