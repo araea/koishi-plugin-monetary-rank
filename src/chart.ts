@@ -1,26 +1,23 @@
 import { h } from 'koishi'
 import { Asset, NICKNAME_FONT } from './assets'
-import { baseline, EMPHASIZED_WEIGHT, harmonize, lch, MONO_STACK, scheme, SHAPE, TYPE } from './m3'
+import { baseline, EMPHASIZED_WEIGHT, scheme } from './m3'
 
 /*
- * 柱状榜的源色相跟 message-counter 走，不跟本插件的卡片样式走。
+ * 这张榜与 message-counter 的水平柱状榜共用一套版式与一套配色。
  *
- * 这两张榜会在同一个群里前后脚发出来，底色一冷一暖并排看就是两套设计；
- * 而每行的条色本来就由头像决定，主色在这张图上只影响页面底色、页眉文字
- * 和无彩头像的回退色相——让它们对齐，代价最小、收益最直接。
- * 卡片样式（样式 3）仍用本插件自己的金色。
+ * 两张榜会在同一个群里前后脚发出来，和 ayjx 的 stats 榜也会并排出现，
+ * 所以不只版式逐项对齐，颜色也照搬 ayjx 的 `chart/utils.rs`：同一支头像色
+ * 算出来的条色、轨道、读数与占比，三边必须逐位相同。下面是那套运算的搬字版。
+ *
+ * SCHEME 只留给 `baseline()` 排版重置用，页面上看得见的颜色全部来自下面的常量。
  */
 const HUE = 268
 const SCHEME = scheme(HUE)
 
 /*
- * 版式与 message-counter 的水平柱状榜逐项对齐，两个插件的榜单会在同一个群里
- * 前后脚发出来，行高、条长、字号只要差一点，并排看就是两张图。
- * 这一组数值又都来自 ayjx 的 `draw_bar_chart`（那边以 2 倍尺寸绘制，这里是 1 倍）：
- * 行高 50、条最短 150、随数额增长 700、名字左内缩 10、条尾到数额 10、
- * 数额与占比之间 8。改动时三处一起改。
- * 两处字号取字阶：数额是每行的一号数字，走 headlineLarge；占比退到 titleLarge，
- * 与数额保持 2:3。
+ * 版式与 message-counter、ayjx 的 `draw_bar_chart` 逐项对齐（ayjx 以 2 倍尺寸
+ * 绘制，这里是 1 倍）：行高 50、条最短 150、随数额增长 700、名字左内缩 10、
+ * 条尾到数额 10、数额与占比之间 8、页面留白 24。改动时三处一起改。
  */
 const LAYOUT = {
   avatarSize: 50, // 头像边长，也是每一行的高度
@@ -30,45 +27,123 @@ const LAYOUT = {
   barSpan: 700, // 柱状条随数额增长的最大长度
   namePad: 10, // 名称距柱状条左端的距离
   textGap: 10, // 柱状条末端与数额之间的空隙
-  countFontSize: TYPE.headlineLarge.size, // 数额字号
-  percentFontSize: TYPE.titleLarge.size, // 百分比字号
+  countFontSize: 30, // 数额字号，与 ayjx 的 font_size 同档
+  percentFontSize: 20, // 百分比字号，与 ayjx 的 pct_font_size 同档
   percentGap: 8, // 数额与百分比之间的空隙
   pagePadX: 24,
   pagePadY: 24,
   iconSize: 32,
+  // 页眉：标题 32、元信息行 18、两者之间 12、到榜单 24
+  titleFontSize: 32,
+  metaFontSize: 18,
+  headerGap: 12,
+  headerMargin: 24,
 } as const
 
-/**
- * 形状刻度：条是条高的两成（50 的 20% = 10，SHAPE 里最近的一档是 medium = 12），
- * 头像与轨道取全圆角。下面这条是条的起点：头像宽度加一道头像与条之间的空隙。
- */
-const BAR_RADIUS = SHAPE.medium
+/** 条的圆角是条高的两成（50 的 20% = 10）。 */
+const BAR_RADIUS = 10
 const TRACK_WIDTH = LAYOUT.barMinWidth + LAYOUT.barSpan
 const BAR_X = LAYOUT.avatarSize + LAYOUT.avatarGap
 
 /**
- * 要对齐的读数（数额、占比）走等宽栈，昵称走 message-counter 那一支字体。
- * 两个字体栈逐项照搬 message-counter 的 numFont / chartFont：同一份数据在两个
- * 插件里必须落到同一支字体上。
- * 等宽栈里没有汉字，把昵称字体接在后面，读数里可能夹的字才不掉队。
+ * 行内文字的字体：与 ayjx 的取字体顺序一致，首选系统里的 Noto Sans CJK SC
+ * （ayjx 的 config.toml 里 font_family 就是它）。昵称与读数同一支字体，
+ * 数字不再走等宽栈——ayjx 那边整张图只用一支字体。
+ * 后面接 message-counter 随包带的那支，两个插件在同一台机器上落到同一支字体。
  */
-const NAME_FONT = `'${NICKNAME_FONT}', "Microsoft YaHei", sans-serif`
-const NUM_FONT = `${MONO_STACK}, ${NAME_FONT}`
+const CHART_FONT = `"Noto Sans CJK SC", "${NICKNAME_FONT}", "Microsoft YaHei", sans-serif`
 
 /*
- * 同一支色相里的四个色调，取值与 message-counter 一致：
- * 条 48、轨道 73（彩度 23，条色与页面底色各半）、数额 32、占比 47（彩度 28）。
- * 条固定在色调 48，条上的白字永远够对比，不必逐行判断该配深字还是浅字。
+ * ── 以下是 ayjx `src/plugins/stats/chart/utils.rs` 与 `renderer.rs` 的搬字版 ──
+ *
+ * 逐行照搬，连 `as u8` 的截断与 `.round()` 的位置都没改：只有逐位相同，
+ * 两张榜的颜色才谈得上一致。改了这里，ayjx 那边要对着一块改。
  */
-const TONE = { bar: 48, track: 73, value: 32, percent: 47 } as const
-const CHROMA = { bar: 46, track: 23, value: 30, percent: 28 } as const
 
-/**
- * 取不到头像主色时的兜底色：一支真正的灰（彩度 0）。
- * harmonize 见到彩度低于 4 的来源就退回主色相，行色仍然落在设计系统里，
- * 不会在报错路径上露出一支系统外的颜色。
- */
-const GRAY = lch(50, 0, HUE)
+/** 页面与文字的纸色、墨色，取自 ayjx 的 `ColorScheme::default`（scheme-manual）。 */
+const PAPER = '#fffefa' // surface，页面底色
+const INK = '#1f2a27' // on-surface，标题
+const INK_SOFT = '#4f5c57' // on-surface-variant，元信息行
+/** 刻度线与头像描边：8% 的黑。 */
+const HAIRLINE = 'rgba(0, 0, 0, 0.08)'
+/** 取不到头像时的兜底色，即 ayjx 的 `FALLBACK_THEME`（主色）。 */
+const FALLBACK_THEME = '#1f6350'
+
+type Rgb = [number, number, number]
+
+const clamp = (value: number, low: number, high: number) => Math.min(high, Math.max(low, value))
+
+const hexToRgb = (hex: string): Rgb => [
+  parseInt(hex.slice(1, 3), 16) || 0,
+  parseInt(hex.slice(3, 5), 16) || 0,
+  parseInt(hex.slice(5, 7), 16) || 0,
+]
+
+const rgbToHex = (color: Rgb) =>
+  '#' + color.map((value) => clamp(Math.round(value), 0, 255).toString(16).padStart(2, '0')).join('')
+
+/** Rust 里 `x as u8` 是截断，不是四舍五入。 */
+const to8 = (value: number) => clamp(Math.trunc(value), 0, 255)
+
+/** RGB → HSL，H 为 0—360，S/L 为 0—1。 */
+function toHsl(color: Rgb): Rgb {
+  const [r, g, b] = color.map((value) => value / 255) as Rgb
+  const max = Math.max(r, g, b)
+  const min = Math.min(r, g, b)
+  const l = (max + min) / 2
+  const d = max - min
+  if (Math.abs(d) < 1e-6) return [0, 0, l]
+  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min)
+  const h = max === r
+    ? 60 * (((g - b) / d) % 6)
+    : max === g
+      ? 60 * ((b - r) / d + 2)
+      : 60 * ((r - g) / d + 4)
+  return [(h + 360) % 360, s, l]
+}
+
+/** HSL → RGB。 */
+function fromHsl(h: number, s: number, l: number): Rgb {
+  const c = (1 - Math.abs(2 * l - 1)) * s
+  const hp = (h % 360) / 60
+  const x = c * (1 - Math.abs((hp % 2) - 1))
+  const [r, g, b] = hp < 1 ? [c, x, 0] : hp < 2 ? [x, c, 0] : hp < 3 ? [0, c, x] : hp < 4 ? [0, x, c] : hp < 5 ? [x, 0, c] : [c, 0, x]
+  const m = l - c / 2
+  const channel = (value: number) => clamp(Math.round(clamp(value + m, 0, 1) * 255), 0, 255)
+  return [channel(r), channel(g), channel(b)]
+}
+
+const yiq = (color: Rgb) => (color[0] * 299 + color[1] * 587 + color[2] * 114) / 1000
+
+/** 主题色的明度与饱和度收进窄带，只留色相。 */
+function harmonizeTheme(color: Rgb): Rgb {
+  const [h, s, l] = toHsl(color)
+  // 本来就没有色相的头像（纯灰）保持中性，硬给饱和度会凭空染出一条彩色的条
+  if (s < 0.06) return fromHsl(0, 0, clamp(l, 0.36, 0.5))
+  return fromHsl(h, clamp(s, 0.18, 0.42), clamp(l, 0.36, 0.5))
+}
+
+const mixWithWhite = (color: Rgb, opacity: number): Rgb =>
+  color.map((value) => to8(value * opacity + 255 * (1 - opacity))) as Rgb
+
+const mixWithColor = (color: Rgb, base: Rgb, opacity: number): Rgb => {
+  const t = clamp(opacity, 0, 1)
+  return color.map((value, i) => to8(value * t + base[i] * (1 - t))) as Rgb
+}
+
+/** 同色相的深调：给淡底上的字用。 */
+function deepTone(color: Rgb, strength: number): Rgb {
+  const black: Rgb = [0, 0, 0]
+  let out = mixWithColor(color, black, clamp(strength, 0.05, 1))
+  for (let i = 0; i < 4; i++) {
+    if (yiq(out) <= 96) break
+    out = mixWithColor(out, black, 0.75)
+  }
+  return out
+}
+
+/** 实色条上的字色：亮的底取深调，暗的底取极浅调。 */
+const contrastInk = (color: Rgb): Rgb => (yiq(color) >= 128 ? deepTone(color, 0.26) : mixWithWhite(color, 0.1))
 
 export interface ChartRow {
   name: string
@@ -129,9 +204,9 @@ const percentOf = (value: number, total: number) =>
 /**
  * 样式 2：带头像的水平条形榜。
  *
- * 每行的条色由头像主色推出，但只借它的色相——色调和彩度都换成设计系统的取值。
- * 这样既保留了「这条是我的颜色」，整张图的明暗节奏又是齐的，
- * 不会因为谁的头像特别暗而糊掉，文字对比度也始终够。
+ * 版式与配色都与 ayjx 的 `draw_bar_chart` 相同：每行的条色由头像主色推出，
+ * 明度与饱和度收进窄带、只留色相；轨道是条色与白各半，读数是条色的深调，
+ * 占比再往轨道色退一档。
  */
 export function renderChart(title: string, subtitle: string, rows: ChartRow[], icons: Asset[], backgrounds: Asset[], options: ChartOptions, fontFace = '') {
   // subtitle 由调用方拼好，内含 <span class="sep"> 分隔点，所以不整串转义；
@@ -168,11 +243,16 @@ export function renderChart(title: string, subtitle: string, rows: ChartRow[], i
   ).join('')
 
   const items = rows.map((row, index) => {
-    const source = row.accent || GRAY
-    const accent = harmonize(source, TONE.bar, CHROMA.bar, HUE)
-    const track = harmonize(source, TONE.track, CHROMA.track, HUE)
-    const valueInk = harmonize(source, TONE.value, CHROMA.value, HUE)
-    const percentInk = harmonize(source, TONE.percent, CHROMA.percent, HUE)
+    // 取不到头像主色时用 ayjx 的兜底色，行色仍落在那套运算里
+    const bar = harmonizeTheme(hexToRgb(row.accent || FALLBACK_THEME))
+    const track = mixWithWhite(bar, 0.5)
+    const valueTone = deepTone(bar, 0.34)
+    const accent = rgbToHex(bar)
+    const trackCss = rgbToHex(track)
+    const valueInk = rgbToHex(valueTone)
+    // 占比是次要信息：往轨道色退一档，同一支色相
+    const percentInk = rgbToHex(mixWithColor(valueTone, track, 0.64))
+    const nameInk = rgbToHex(contrastInk(bar))
 
     const barWidth = LAYOUT.barMinWidth + (LAYOUT.barSpan * row.count) / top
     const block = blocks[index]
@@ -199,12 +279,12 @@ export function renderChart(title: string, subtitle: string, rows: ChartRow[], i
     return `
       <li class="row">
         <img class="avatar" src="data:image/png;base64,${row.avatarBase64}">
-        <span class="track" style="background:${track}">
+        <span class="track" style="background:${trackCss}">
           <span class="ticks">${ticks}</span>
           ${fullLayer}
-          <span class="bar" style="width:${barWidth.toFixed(1)}px;background:${accent}">
+          <span class="bar" style="width:${barWidth.toFixed(3)}px;background:${accent}">
             ${barLayer}
-            <span class="name" style="max-width:${nameRoom.toFixed(1)}px">${h.escape(row.name)}</span>
+            <span class="name" style="max-width:${nameRoom.toFixed(1)}px;color:${nameInk}">${h.escape(row.name)}</span>
             ${options.shouldMoveIconToBarEndLeft ? '' : badges}
           </span>
           ${options.shouldMoveIconToBarEndLeft && badges
@@ -227,27 +307,31 @@ export function renderChart(title: string, subtitle: string, rows: ChartRow[], i
   <style>
     ${baseline(SCHEME)}
     ${fontFace}
-    html { min-height: 100%; background: linear-gradient(135deg, ${SCHEME.surfaceBright} 0%, ${SCHEME.surfaceContainer} 100%); }
+    /* 纸面与墨色与 ayjx 的图表同一张纸：暖白卡面、深墨标题、次级墨小字 */
+    html { min-height: 100%; background: ${PAPER}; }
     body {
       width: ${pageWidth}px;
       padding: ${LAYOUT.pagePadY}px ${LAYOUT.pagePadX}px;
       background: transparent;
+      color: ${INK};
     }
 
-    /* 页眉居中：与 message-counter、ayjx 的榜单同一条版式——标题居中，
-       范围、合计与出图时间并成一行小字跟在下面。 */
-    .head { margin: 0 0 24px; text-align: center; }
+    /* 页眉居中：标题、元信息行的高与间距逐项按 ayjx 的标题区来（32 / 12 / 18），
+       下面的榜单因此落在与 ayjx 同一个纵坐标上。 */
+    .head { margin: 0 0 ${LAYOUT.headerMargin}px; text-align: center; }
     .head h1 {
       margin: 0;
-      font-size: ${TYPE.headlineLarge.size}px; line-height: ${TYPE.headlineLarge.line}px;
-      font-weight: ${EMPHASIZED_WEIGHT.headline}; letter-spacing: ${TYPE.headlineLarge.tracking}px;
-      color: ${SCHEME.onSurface};
+      font-family: ${CHART_FONT};
+      font-size: ${LAYOUT.titleFontSize}px; line-height: ${LAYOUT.titleFontSize}px;
+      font-weight: ${EMPHASIZED_WEIGHT.headline};
+      color: ${INK};
     }
     .head p {
-      margin: 12px 0 0;
-      font-size: ${TYPE.bodyLarge.size}px; line-height: ${TYPE.bodyLarge.line}px;
-      font-weight: ${TYPE.bodyLarge.weight}; letter-spacing: ${TYPE.bodyLarge.tracking}px;
-      color: ${SCHEME.onSurfaceVariant};
+      margin: ${LAYOUT.headerGap}px 0 0;
+      font-family: ${CHART_FONT};
+      font-size: ${LAYOUT.metaFontSize}px; line-height: ${LAYOUT.metaFontSize}px;
+      font-weight: 400;
+      color: ${INK_SOFT};
     }
     /* 分隔点自己带匀称的左右间距，不依赖字体里「·」的空腔 */
     .head .sep { margin: 0 9px; opacity: .55; }
@@ -258,7 +342,9 @@ export function renderChart(title: string, subtitle: string, rows: ChartRow[], i
     .avatar {
       width: ${LAYOUT.avatarSize}px; height: ${LAYOUT.avatarSize}px; flex: none;
       border-radius: var(--md-sys-shape-corner-full); object-fit: cover;
-      background: ${SCHEME.surfaceContainerHighest};
+      /* 头像底下垫一圈发丝细的暗边：浅色头像贴在暖白纸上边缘会化掉 */
+      box-shadow: 0 0 0 1px ${HAIRLINE};
+      background: #c8c8c8;
     }
 
     /* 轨道定长：条最长就铺满它；条的圆角交给这层裁 */
@@ -271,7 +357,7 @@ export function renderChart(title: string, subtitle: string, rows: ChartRow[], i
 
     /* 刻度线压在实色条下面，文字始终在最上层 */
     .ticks { position: absolute; inset: 0; }
-    .ticks i { position: absolute; top: 0; bottom: 0; width: 2px; background: ${SCHEME.outlineVariant}; }
+    .ticks i { position: absolute; top: 0; bottom: 0; width: 2px; background: ${HAIRLINE}; }
 
     .bar {
       position: absolute; left: 0; top: 0; bottom: 0;
@@ -285,10 +371,9 @@ export function renderChart(title: string, subtitle: string, rows: ChartRow[], i
     .name {
       position: relative;
       overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-      font-family: ${NAME_FONT};
-      font-size: ${TYPE.headlineLarge.size}px; line-height: ${LAYOUT.avatarSize}px;
-      font-weight: ${TYPE.headlineLarge.weight};
-      color: ${SCHEME.onPrimary};
+      font-family: ${CHART_FONT};
+      font-size: ${LAYOUT.countFontSize}px; line-height: ${LAYOUT.avatarSize}px;
+      font-weight: 400;
     }
 
     .tail { position: absolute; z-index: 2; top: 50%; transform: translate(-100%, -50%); display: flex; align-items: center; gap: 4px; }
@@ -297,11 +382,12 @@ export function renderChart(title: string, subtitle: string, rows: ChartRow[], i
     .value {
       position: absolute; z-index: 2; top: 50%; transform: translateY(-50%);
       display: flex; align-items: baseline; gap: ${LAYOUT.percentGap}px;
-      font-family: ${NUM_FONT}; font-variant-numeric: tabular-nums;
-      font-size: ${TYPE.headlineLarge.size}px; line-height: 1;
-      font-weight: ${TYPE.headlineLarge.weight}; white-space: nowrap;
+      font-family: ${CHART_FONT}; font-variant-numeric: tabular-nums;
+      font-size: ${LAYOUT.countFontSize}px; line-height: 1;
+      font-weight: 400; white-space: nowrap;
     }
-    .value b { font-size: ${TYPE.titleLarge.size}px; font-weight: ${TYPE.titleLarge.weight}; }
+    .value b { font-size: ${LAYOUT.percentFontSize}px; font-weight: 400; }
+    .value b { font-size: ${LAYOUT.percentFontSize}px; font-weight: 400; }
   </style>
 </head>
 <body>
