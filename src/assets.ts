@@ -69,14 +69,14 @@ export interface Avatar {
 export const FALLBACK_AVATAR: string = fallbackBase64[0]
 
 /**
- * 头像主色：与 ayjx 的 `get_average_color` 逐字对应。
+ * 头像主色：与 acumen 的 `get_average_color` 逐字对应。
  *
  * 那边取的是**圆裁之后**的缩略图，圆外算作纯黑（`make_circular_avatar` 把圆外
  * 留成透明，而求平均时不看 alpha、只累加 RGB），这里照做：只有落在圆里的像素
  * 参与累加，分母仍是整张缩略图的像素数，最后整数除法（向下取整）。
  * message-counter 那边取主色也必须是这一份，两个插件算出来才相等。
  *
- * 设备像素差：ayjx 在 100×100 上用 Lanczos3 缩放，这里是 50×50 的画布重采样，
+ * 设备像素差：acumen 在 100×100 上用 Lanczos3 缩放，这里是 50×50 的画布重采样，
  * 圆覆盖率与滤波器都略有出入，主色因此可能差一两个单位。
  */
 function averageColor(data: Uint8ClampedArray, size: number) {

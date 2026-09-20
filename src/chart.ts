@@ -5,8 +5,8 @@ import { baseline, EMPHASIZED_WEIGHT, scheme } from './m3'
 /*
  * 这张榜与 message-counter 的水平柱状榜共用一套版式与一套配色。
  *
- * 两张榜会在同一个群里前后脚发出来，和 ayjx 的 stats 榜也会并排出现，
- * 所以不只版式逐项对齐，颜色也照搬 ayjx 的 `chart/utils.rs`：同一支头像色
+ * 两张榜会在同一个群里前后脚发出来，和 acumen 的 stats 榜也会并排出现，
+ * 所以不只版式逐项对齐，颜色也照搬 acumen 的 `chart/utils.rs`：同一支头像色
  * 算出来的条色、轨道、读数与占比，三边必须逐位相同。下面是那套运算的搬字版。
  *
  * SCHEME 只留给 `baseline()` 排版重置用，页面上看得见的颜色全部来自下面的常量。
@@ -15,7 +15,7 @@ const HUE = 268
 const SCHEME = scheme(HUE)
 
 /*
- * 版式与 message-counter、ayjx 的 `draw_bar_chart` 逐项对齐（ayjx 以 2 倍尺寸
+ * 版式与 message-counter、acumen 的 `draw_bar_chart` 逐项对齐（acumen 以 2 倍尺寸
  * 绘制，这里是 1 倍）：行高 50、条最短 150、随数额增长 700、名字左内缩 10、
  * 条尾到数额 10、数额与占比之间 8、页面留白 24。改动时三处一起改。
  */
@@ -27,8 +27,8 @@ const LAYOUT = {
   barSpan: 700, // 柱状条随数额增长的最大长度
   namePad: 10, // 名称距柱状条左端的距离
   textGap: 10, // 柱状条末端与数额之间的空隙
-  countFontSize: 30, // 数额字号，与 ayjx 的 font_size 同档
-  percentFontSize: 20, // 百分比字号，与 ayjx 的 pct_font_size 同档
+  countFontSize: 30, // 数额字号，与 acumen 的 font_size 同档
+  percentFontSize: 20, // 百分比字号，与 acumen 的 pct_font_size 同档
   percentGap: 8, // 数额与百分比之间的空隙
   pagePadX: 24,
   pagePadY: 24,
@@ -46,27 +46,27 @@ const TRACK_WIDTH = LAYOUT.barMinWidth + LAYOUT.barSpan
 const BAR_X = LAYOUT.avatarSize + LAYOUT.avatarGap
 
 /**
- * 行内文字的字体：与 ayjx 的取字体顺序一致，首选系统里的 Noto Sans CJK SC
- * （ayjx 的 config.toml 里 font_family 就是它）。昵称与读数同一支字体，
- * 数字不再走等宽栈——ayjx 那边整张图只用一支字体。
+ * 行内文字的字体：与 acumen 的取字体顺序一致，首选系统里的 Noto Sans CJK SC
+ * （acumen 的 config.toml 里 font_family 就是它）。昵称与读数同一支字体，
+ * 数字不再走等宽栈——acumen 那边整张图只用一支字体。
  * 后面接 message-counter 随包带的那支，两个插件在同一台机器上落到同一支字体。
  */
 const CHART_FONT = `"Noto Sans CJK SC", "${NICKNAME_FONT}", "Microsoft YaHei", sans-serif`
 
 /*
- * ── 以下是 ayjx `src/plugins/stats/chart/utils.rs` 与 `renderer.rs` 的搬字版 ──
+ * ── 以下是 acumen `src/plugins/stats/chart/utils.rs` 与 `renderer.rs` 的搬字版 ──
  *
  * 逐行照搬，连 `as u8` 的截断与 `.round()` 的位置都没改：只有逐位相同，
- * 两张榜的颜色才谈得上一致。改了这里，ayjx 那边要对着一块改。
+ * 两张榜的颜色才谈得上一致。改了这里，acumen 那边要对着一块改。
  */
 
-/** 页面与文字的纸色、墨色，取自 ayjx 的 `ColorScheme::default`（scheme-manual）。 */
+/** 页面与文字的纸色、墨色，取自 acumen 的 `ColorScheme::default`（scheme-manual）。 */
 const PAPER = '#fffefa' // surface，页面底色
 const INK = '#1f2a27' // on-surface，标题
 const INK_SOFT = '#4f5c57' // on-surface-variant，元信息行
 /** 刻度线与头像描边：8% 的黑。 */
 const HAIRLINE = 'rgba(0, 0, 0, 0.08)'
-/** 取不到头像时的兜底色，即 ayjx 的 `FALLBACK_THEME`（主色）。 */
+/** 取不到头像时的兜底色，即 acumen 的 `FALLBACK_THEME`（主色）。 */
 const FALLBACK_THEME = '#1f6350'
 
 type Rgb = [number, number, number]
@@ -206,7 +206,7 @@ const percentOf = (value: number, total: number) =>
 /**
  * 样式 2：带头像的水平条形榜。
  *
- * 版式与配色都与 ayjx 的 `draw_bar_chart` 相同：每行的条色由头像主色推出，
+ * 版式与配色都与 acumen 的 `draw_bar_chart` 相同：每行的条色由头像主色推出，
  * 明度与饱和度收进窄带、只留色相；轨道是条色与白各半，读数是条色的深调，
  * 占比再往轨道色退一档。
  */
@@ -231,7 +231,7 @@ export function renderChart(title: string, subtitle: string, rows: ChartRow[], i
     }
   })
 
-  // 轨道是定长的：条最长就铺满它，数额写在轨道右侧的留白上，与 ayjx 一致。
+  // 轨道是定长的：条最长就铺满它，数额写在轨道右侧的留白上，与 acumen 一致。
   // 页面宽度则按最长的那串数额撑开，读数不会溢出。
   const widest = blocks.reduce((max, block) => Math.max(max, block.width), 0)
   const pageWidth = Math.ceil(BAR_X + TRACK_WIDTH + LAYOUT.textGap + widest + LAYOUT.pagePadX * 2)
@@ -245,7 +245,7 @@ export function renderChart(title: string, subtitle: string, rows: ChartRow[], i
   ).join('')
 
   const items = rows.map((row, index) => {
-    // 取不到头像主色时用 ayjx 的兜底色，行色仍落在那套运算里
+    // 取不到头像主色时用 acumen 的兜底色，行色仍落在那套运算里
     const bar = harmonizeTheme(hexToRgb(row.accent || FALLBACK_THEME))
     const track = mixWithWhite(bar, 0.5)
     const valueTone = deepTone(bar, 0.34)
@@ -309,7 +309,7 @@ export function renderChart(title: string, subtitle: string, rows: ChartRow[], i
   <style>
     ${baseline(SCHEME)}
     ${fontFace}
-    /* 纸面与墨色与 ayjx 的图表同一张纸：暖白卡面、深墨标题、次级墨小字 */
+    /* 纸面与墨色与 acumen 的图表同一张纸：暖白卡面、深墨标题、次级墨小字 */
     html { min-height: 100%; background: ${PAPER}; }
     body {
       width: ${pageWidth}px;
@@ -318,8 +318,8 @@ export function renderChart(title: string, subtitle: string, rows: ChartRow[], i
       color: ${INK};
     }
 
-    /* 页眉居中：标题、元信息行的高与间距逐项按 ayjx 的标题区来（32 / 12 / 18），
-       下面的榜单因此落在与 ayjx 同一个纵坐标上。 */
+    /* 页眉居中：标题、元信息行的高与间距逐项按 acumen 的标题区来（32 / 12 / 18），
+       下面的榜单因此落在与 acumen 同一个纵坐标上。 */
     .head { margin: 0 0 ${LAYOUT.headerMargin}px; text-align: center; }
     .head h1 {
       margin: 0;
