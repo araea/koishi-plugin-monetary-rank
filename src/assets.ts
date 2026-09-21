@@ -14,6 +14,41 @@ export interface Asset {
 const AVATAR_SIZE = 50
 const AVATAR_CACHE_MAX = 512
 
+type Rgb = [number, number, number]
+
+const clamp = (value: number, low: number, high: number) => Math.min(high, Math.max(low, value))
+
+const rgbToHex = (color: Rgb) =>
+  '#' + color.map((value) => clamp(Math.round(value), 0, 255).toString(16).padStart(2, '0')).join('')
+
+/** RGB → HSL，H 为 0—360，S/L 为 0—1；`chart.ts` 里是同一份。 */
+function toHsl(color: Rgb): Rgb {
+  const [r, g, b] = color.map((value) => value / 255) as Rgb
+  const max = Math.max(r, g, b)
+  const min = Math.min(r, g, b)
+  const l = (max + min) / 2
+  const d = max - min
+  if (Math.abs(d) < 1e-6) return [0, 0, l]
+  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min)
+  const h = max === r
+    ? 60 * (((g - b) / d) % 6)
+    : max === g
+      ? 60 * ((b - r) / d + 2)
+      : 60 * ((r - g) / d + 4)
+  return [(h + 360) % 360, s, l]
+}
+
+/** HSL → RGB；`chart.ts` 里是同一份。 */
+function fromHsl(h: number, s: number, l: number): Rgb {
+  const c = (1 - Math.abs(2 * l - 1)) * s
+  const hp = (h % 360) / 60
+  const x = c * (1 - Math.abs((hp % 2) - 1))
+  const [r, g, b] = hp < 1 ? [c, x, 0] : hp < 2 ? [x, c, 0] : hp < 3 ? [0, c, x] : hp < 4 ? [0, x, c] : hp < 5 ? [x, 0, c] : [c, 0, x]
+  const m = l - c / 2
+  const channel = (value: number) => clamp(Math.round(clamp(value + m, 0, 1) * 255), 0, 255)
+  return [channel(r), channel(g), channel(b)]
+}
+
 /**
  * 读取 `data/messageCounter` 下的自定义素材，与 message-counter 插件共用同一个目录。
  * 文件名即用户 ID，`1234-1.png` 这样的后缀用于给同一个人放多张图。
@@ -61,7 +96,7 @@ export function nicknameFontFace(ctx: Context): string {
 /** 头像加载结果：base64 图与一枚用于配色的主色。 */
 export interface Avatar {
   base64: string
-  /** 头像像素的平均色，取不到时为空串。 */
+  /** 头像的调子（acumen 的 avatar_theme_color），取不到时为空串。 */
   accent: string
 }
 
@@ -69,37 +104,75 @@ export interface Avatar {
 export const FALLBACK_AVATAR: string = fallbackBase64[0]
 
 /**
- * 头像主色：与 acumen 的 `get_average_color` 逐字对应。
+ * 头像主色：与 acumen 的 `avatar_theme_color` 逐字对应。
  *
- * 那边取的是**圆裁之后**的缩略图，圆外算作纯黑（`make_circular_avatar` 把圆外
- * 留成透明，而求平均时不看 alpha、只累加 RGB），这里照做：只有落在圆里的像素
- * 参与累加，分母仍是整张缩略图的像素数，最后整数除法（向下取整）。
+ * **色相与彩度取「有颜色的那部分」的均色，明度取整张图的均色。** 一大半头像是
+ * 「大片白底 + 中间一小块彩色」，白底一平均就把那一小块的方向稀释到快没有了；
+ * 所以给每个像素按它自己的彩度加一份权重（`+0.04` 的底让纯灰头像退化成朴素平均）。
+ * 明度仍按整张图算，否则一张暗底亮标的头像会被那一点亮色带偏。最后把明度落进
+ * 收调的窄带里——那个窄带就是 `chart.ts` 里 `harmonizeTheme` 随后要 clamp 到的那一段。
+ *
+ * 圆内像素才参与：acumen 缓存里存的是**圆裁之后**的缩略图，圆外透明、不计入，
+ * 这里没有那一步，所以圆外的像素由这道遮罩剔除，两边看到的是同一批像素。
  * message-counter 那边取主色也必须是这一份，两个插件算出来才相等。
  *
  * 设备像素差：acumen 在 100×100 上用 Lanczos3 缩放，这里是 50×50 的画布重采样，
  * 圆覆盖率与滤波器都略有出入，主色因此可能差一两个单位。
  */
-function averageColor(data: Uint8ClampedArray, size: number) {
+function themeColorOf(data: Uint8ClampedArray, size: number): string {
   const center = size / 2
   const radius = center - 1
-  let r = 0
-  let g = 0
-  let b = 0
+  const inside: Rgb[] = []
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
       const dx = x - center + 0.5
       const dy = y - center + 0.5
       if (Math.hypot(dx, dy) > radius + 0.5) continue
       const i = (y * size + x) * 4
-      r += data[i]
-      g += data[i + 1]
-      b += data[i + 2]
+      inside.push([data[i], data[i + 1], data[i + 2]])
     }
   }
-  const count = size * size
-  return '#' + [r, g, b]
-    .map((sum) => Math.floor(sum / count).toString(16).padStart(2, '0'))
-    .join('')
+  return avatarThemeColor(inside)
+}
+
+/** [`themeColorOf`] 的算法本体：一批圆内像素 → 这一行的主色。 */
+function avatarThemeColor(inside: Rgb[]): string {
+  if (!inside.length) return ''
+  let r = 0
+  let g = 0
+  let b = 0
+  for (const pixel of inside) {
+    r += pixel[0]
+    g += pixel[1]
+    b += pixel[2]
+  }
+  const plain: Rgb = [
+    Math.floor(r / inside.length),
+    Math.floor(g / inside.length),
+    Math.floor(b / inside.length),
+  ]
+
+  // 色相与彩度来自按彩度加权的那一版
+  let tr = 0
+  let tg = 0
+  let tb = 0
+  let weight = 0
+  for (const pixel of inside) {
+    const chroma = (Math.max(pixel[0], pixel[1], pixel[2]) - Math.min(pixel[0], pixel[1], pixel[2])) / 255
+    const w = chroma + 0.04
+    tr += pixel[0] * w
+    tg += pixel[1] * w
+    tb += pixel[2] * w
+    weight += w
+  }
+  if (weight <= 0) return rgbToHex(plain)
+  const tinted: Rgb = [Math.round(tr / weight), Math.round(tg / weight), Math.round(tb / weight)]
+
+  // 明度**在收调的窄带里**还原，不用原样的那个值：一张白底头像的均色明度贴着顶，
+  // 在那个明度上 HSL 根本表达不出多少彩度，刚捞回来的色相会被重新压扁。
+  const [h, s] = toHsl(tinted)
+  const l = toHsl(plain)[2]
+  return rgbToHex(fromHsl(h, s, clamp(l, 0.36, 0.50)))
 }
 
 export function createAvatarLoader(ctx: Context) {
@@ -125,7 +198,7 @@ export function createAvatarLoader(ctx: Context) {
 
         // 主色顺手在缩略图上取，比原图快，精度也足够
         try {
-          accent = averageColor(context.getImageData(0, 0, AVATAR_SIZE, AVATAR_SIZE).data, AVATAR_SIZE)
+          accent = themeColorOf(context.getImageData(0, 0, AVATAR_SIZE, AVATAR_SIZE).data, AVATAR_SIZE)
         } catch {
           // 某些 canvas 实现不支持读回像素，配色退回主题色即可
         }
@@ -151,10 +224,10 @@ export function createAvatarLoader(ctx: Context) {
 /**
  * 没有 canvas 服务时，头像主色交给浏览器算。
  *
- * 这里放的是「缩到 50×50，圆裁后求平均，圆外算纯黑，向下取整」的第二份实现，
- * 另一份在 message-counter 的客户端脚本里，两处必须逐字相同——同一张头像在
- * 两个插件里要算出同一个主色。缩略图尺寸与圆覆盖率都按 50×50 那一档来，
- * 所以原图多大都不影响结果。
+ * 这里放的是上面 `themeColorOf` / `avatarThemeColor` 的第二份实现（那边在本进程里跑，
+ * 这份在页面里跑，两边只能各写一遍），另一份在 message-counter 的客户端脚本里：
+ * 三处必须逐字相同——同一张头像在两张榜上要算出同一个调子。缩略图尺寸与圆覆盖率
+ * 都按 50×50 那一档来，所以原图多大都不影响结果。
  */
 export async function measureAccents(ctx: Context, sources: string[]): Promise<string[]> {
   if (!sources.length) return []
@@ -162,6 +235,30 @@ export async function measureAccents(ctx: Context, sources: string[]): Promise<s
   try {
     await page.setContent('<!DOCTYPE html><body></body>', { waitUntil: 'load' })
     return await page.evaluate(async (list: string[]) => {
+      const clamp = (value: number, low: number, high: number) => Math.min(high, Math.max(low, value))
+      const rgbToHex = (color: number[]) =>
+        '#' + color.map((value) => clamp(Math.round(value), 0, 255).toString(16).padStart(2, '0')).join('')
+      const toHsl = (color: number[]) => {
+        const [r, g, b] = color.map((value) => value / 255)
+        const max = Math.max(r, g, b)
+        const min = Math.min(r, g, b)
+        const l = (max + min) / 2
+        const d = max - min
+        if (Math.abs(d) < 1e-6) return [0, 0, l]
+        const s = l > 0.5 ? d / (2 - max - min) : d / (max + min)
+        const h = max === r ? 60 * (((g - b) / d) % 6) : max === g ? 60 * ((b - r) / d + 2) : 60 * ((r - g) / d + 4)
+        return [(h + 360) % 360, s, l]
+      }
+      const fromHsl = (h: number, s: number, l: number) => {
+        const c = (1 - Math.abs(2 * l - 1)) * s
+        const hp = (h % 360) / 60
+        const x = c * (1 - Math.abs((hp % 2) - 1))
+        const [r, g, b] = hp < 1 ? [c, x, 0] : hp < 2 ? [x, c, 0] : hp < 3 ? [0, c, x] : hp < 4 ? [0, x, c] : hp < 5 ? [x, 0, c] : [c, 0, x]
+        const m = l - c / 2
+        const channel = (value: number) => clamp(Math.round(clamp(value + m, 0, 1) * 255), 0, 255)
+        return [channel(r), channel(g), channel(b)]
+      }
+
       const measure = async (base64: string) => {
         const image = new Image()
         image.src = 'data:image/png;base64,' + base64
@@ -180,23 +277,42 @@ export async function measureAccents(ctx: Context, sources: string[]): Promise<s
         const center = size / 2
         const radius = center - 1
         const data = context.getImageData(0, 0, size, size).data
-        let r = 0
-        let g = 0
-        let b = 0
+        const inside: number[][] = []
         for (let y = 0; y < size; y++) {
           for (let x = 0; x < size; x++) {
             const dx = x - center + 0.5
             const dy = y - center + 0.5
             if (Math.hypot(dx, dy) > radius + 0.5) continue
             const i = (y * size + x) * 4
-            r += data[i]
-            g += data[i + 1]
-            b += data[i + 2]
+            inside.push([data[i], data[i + 1], data[i + 2]])
           }
         }
-        const count = size * size
-        const toHex = (sum: number) => Math.floor(sum / count).toString(16).padStart(2, '0')
-        return '#' + toHex(r) + toHex(g) + toHex(b)
+        if (!inside.length) return ''
+        // 明度取整张图的均色，色相与彩度取按彩度加权的那一版
+        let r = 0
+        let g = 0
+        let b = 0
+        let tr = 0
+        let tg = 0
+        let tb = 0
+        let weight = 0
+        for (const pixel of inside) {
+          r += pixel[0]
+          g += pixel[1]
+          b += pixel[2]
+          const chroma = (Math.max(pixel[0], pixel[1], pixel[2]) - Math.min(pixel[0], pixel[1], pixel[2])) / 255
+          const w = chroma + 0.04
+          tr += pixel[0] * w
+          tg += pixel[1] * w
+          tb += pixel[2] * w
+          weight += w
+        }
+        const plain = [Math.floor(r / inside.length), Math.floor(g / inside.length), Math.floor(b / inside.length)]
+        if (weight <= 0) return rgbToHex(plain)
+        const tinted = [Math.round(tr / weight), Math.round(tg / weight), Math.round(tb / weight)]
+        const [h, s] = toHsl(tinted)
+        const l = toHsl(plain)[2]
+        return rgbToHex(fromHsl(h, s, clamp(l, 0.36, 0.50)))
       }
       return await Promise.all(list.map(measure))
     }, sources)

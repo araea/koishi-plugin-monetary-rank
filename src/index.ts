@@ -163,6 +163,7 @@ export function apply(ctx: Context, config: Config) {
         horizontalBarBackgroundFullOpacity: config.horizontalBarBackgroundFullOpacity,
         shouldMoveIconToBarEndLeft: config.shouldMoveIconToBarEndLeft,
         gridLinesOverBars: config.gridLinesOverBars,
+        valueFollowsBar: config.valueFollowsBar,
       }, nicknameFontFace(ctx))
       return h.image(await screenshot(html, { fit: true }), 'image/png')
     } catch (error) {
