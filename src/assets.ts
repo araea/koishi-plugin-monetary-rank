@@ -175,6 +175,16 @@ function avatarThemeColor(inside: Rgb[]): string {
   return rgbToHex(fromHsl(h, s, clamp(l, 0.36, 0.50)))
 }
 
+/** 按文件头认浏览器能解的几种位图：PNG、JPEG、GIF、WebP、BMP。 */
+function looksLikeImage(bytes: Buffer) {
+  const startsWith = (...signature: number[]) => signature.every((byte, index) => bytes[index] === byte)
+  return startsWith(0x89, 0x50, 0x4e, 0x47)
+    || startsWith(0xff, 0xd8, 0xff)
+    || startsWith(0x47, 0x49, 0x46, 0x38)
+    || (startsWith(0x52, 0x49, 0x46, 0x46) && bytes.toString('ascii', 8, 12) === 'WEBP')
+    || startsWith(0x42, 0x4d)
+}
+
 export function createAvatarLoader(ctx: Context) {
   const logger = ctx.logger('monetary-rank')
   const cache = new Map<string, Avatar>()
@@ -205,8 +215,11 @@ export function createAvatarLoader(ctx: Context) {
 
         base64 = (await canvas.toBuffer('image/png')).toString('base64')
       } else {
-        // 没有 canvas 服务：原图直接交给浏览器，缩略图与主色都在那边做
-        base64 = Buffer.from(buffer as ArrayBuffer).toString('base64')
+        // 没有 canvas 服务：原图直接交给浏览器，缩略图与主色都在那边做。
+        // 这里没人解码，状态码 200 的错误页也会被当成头像缓存下来，所以先认一下文件头
+        const bytes = Buffer.from(buffer as ArrayBuffer)
+        if (!looksLikeImage(bytes)) throw new Error(`返回的不是图片（${bytes.length} 字节）`)
+        base64 = bytes.toString('base64')
       }
 
       const avatar: Avatar = { base64, accent }
@@ -222,6 +235,97 @@ export function createAvatarLoader(ctx: Context) {
 }
 
 /**
+ * 浏览器里跑的那一份取色，写成字符串交给 page.evaluate。
+ *
+ * 不能直接传函数：构建时 esbuild 会给函数体里的每个具名箭头函数包上 `__name(...)`，
+ * 这个辅助函数只存在于 Node 侧，函数体序列化进页面后就是未定义名——3.2.1 到 3.4.0
+ * 一走这条路就抛 `ReferenceError: __name is not defined`，图片榜整体退回文字榜。
+ * 写成字符串，打包器就碰不到它。
+ */
+const MEASURE_ACCENTS_SCRIPT = `async (list) => {
+  const clamp = (value, low, high) => Math.min(high, Math.max(low, value))
+  const rgbToHex = (color) =>
+    '#' + color.map((value) => clamp(Math.round(value), 0, 255).toString(16).padStart(2, '0')).join('')
+  const toHsl = (color) => {
+    const [r, g, b] = color.map((value) => value / 255)
+    const max = Math.max(r, g, b)
+    const min = Math.min(r, g, b)
+    const l = (max + min) / 2
+    const d = max - min
+    if (Math.abs(d) < 1e-6) return [0, 0, l]
+    const s = l > 0.5 ? d / (2 - max - min) : d / (max + min)
+    const h = max === r ? 60 * (((g - b) / d) % 6) : max === g ? 60 * ((b - r) / d + 2) : 60 * ((r - g) / d + 4)
+    return [(h + 360) % 360, s, l]
+  }
+  const fromHsl = (h, s, l) => {
+    const c = (1 - Math.abs(2 * l - 1)) * s
+    const hp = (h % 360) / 60
+    const x = c * (1 - Math.abs((hp % 2) - 1))
+    const [r, g, b] = hp < 1 ? [c, x, 0] : hp < 2 ? [x, c, 0] : hp < 3 ? [0, c, x] : hp < 4 ? [0, x, c] : hp < 5 ? [x, 0, c] : [c, 0, x]
+    const m = l - c / 2
+    const channel = (value) => clamp(Math.round(clamp(value + m, 0, 1) * 255), 0, 255)
+    return [channel(r), channel(g), channel(b)]
+  }
+
+  const measure = async (base64) => {
+    const image = new Image()
+    image.src = 'data:image/png;base64,' + base64
+    await new Promise((resolve) => {
+      image.onload = resolve
+      image.onerror = resolve
+    })
+    if (!image.width) return ''
+    const size = 50
+    const canvas = document.createElement('canvas')
+    const context = canvas.getContext('2d', { willReadFrequently: true })
+    canvas.width = size
+    canvas.height = size
+    context.drawImage(image, 0, 0, size, size)
+
+    const center = size / 2
+    const radius = center - 1
+    const data = context.getImageData(0, 0, size, size).data
+    const inside = []
+    for (let y = 0; y < size; y++) {
+      for (let x = 0; x < size; x++) {
+        const dx = x - center + 0.5
+        const dy = y - center + 0.5
+        if (Math.hypot(dx, dy) > radius + 0.5) continue
+        const i = (y * size + x) * 4
+        inside.push([data[i], data[i + 1], data[i + 2]])
+      }
+    }
+    if (!inside.length) return ''
+    // 明度取整张图的均色，色相与彩度取按彩度加权的那一版
+    let r = 0
+    let g = 0
+    let b = 0
+    let tr = 0
+    let tg = 0
+    let tb = 0
+    let weight = 0
+    for (const pixel of inside) {
+      r += pixel[0]
+      g += pixel[1]
+      b += pixel[2]
+      const chroma = (Math.max(pixel[0], pixel[1], pixel[2]) - Math.min(pixel[0], pixel[1], pixel[2])) / 255
+      const w = chroma + 0.04
+      tr += pixel[0] * w
+      tg += pixel[1] * w
+      tb += pixel[2] * w
+      weight += w
+    }
+    const plain = [Math.floor(r / inside.length), Math.floor(g / inside.length), Math.floor(b / inside.length)]
+    if (weight <= 0) return rgbToHex(plain)
+    const tinted = [Math.round(tr / weight), Math.round(tg / weight), Math.round(tb / weight)]
+    const [h, s] = toHsl(tinted)
+    const l = toHsl(plain)[2]
+    return rgbToHex(fromHsl(h, s, clamp(l, 0.36, 0.50)))
+  }
+  return await Promise.all(list.map(measure))
+}`
+
+/**
  * 没有 canvas 服务时，头像主色交给浏览器算。
  *
  * 这里放的是上面 `themeColorOf` / `avatarThemeColor` 的第二份实现（那边在本进程里跑，
@@ -234,88 +338,7 @@ export async function measureAccents(ctx: Context, sources: string[]): Promise<s
   const page = await ctx.puppeteer.page()
   try {
     await page.setContent('<!DOCTYPE html><body></body>', { waitUntil: 'load' })
-    return await page.evaluate(async (list: string[]) => {
-      const clamp = (value: number, low: number, high: number) => Math.min(high, Math.max(low, value))
-      const rgbToHex = (color: number[]) =>
-        '#' + color.map((value) => clamp(Math.round(value), 0, 255).toString(16).padStart(2, '0')).join('')
-      const toHsl = (color: number[]) => {
-        const [r, g, b] = color.map((value) => value / 255)
-        const max = Math.max(r, g, b)
-        const min = Math.min(r, g, b)
-        const l = (max + min) / 2
-        const d = max - min
-        if (Math.abs(d) < 1e-6) return [0, 0, l]
-        const s = l > 0.5 ? d / (2 - max - min) : d / (max + min)
-        const h = max === r ? 60 * (((g - b) / d) % 6) : max === g ? 60 * ((b - r) / d + 2) : 60 * ((r - g) / d + 4)
-        return [(h + 360) % 360, s, l]
-      }
-      const fromHsl = (h: number, s: number, l: number) => {
-        const c = (1 - Math.abs(2 * l - 1)) * s
-        const hp = (h % 360) / 60
-        const x = c * (1 - Math.abs((hp % 2) - 1))
-        const [r, g, b] = hp < 1 ? [c, x, 0] : hp < 2 ? [x, c, 0] : hp < 3 ? [0, c, x] : hp < 4 ? [0, x, c] : hp < 5 ? [x, 0, c] : [c, 0, x]
-        const m = l - c / 2
-        const channel = (value: number) => clamp(Math.round(clamp(value + m, 0, 1) * 255), 0, 255)
-        return [channel(r), channel(g), channel(b)]
-      }
-
-      const measure = async (base64: string) => {
-        const image = new Image()
-        image.src = 'data:image/png;base64,' + base64
-        await new Promise((resolve) => {
-          image.onload = resolve
-          image.onerror = resolve
-        })
-        if (!image.width) return ''
-        const size = 50
-        const canvas = document.createElement('canvas')
-        const context = canvas.getContext('2d', { willReadFrequently: true })
-        canvas.width = size
-        canvas.height = size
-        context.drawImage(image, 0, 0, size, size)
-
-        const center = size / 2
-        const radius = center - 1
-        const data = context.getImageData(0, 0, size, size).data
-        const inside: number[][] = []
-        for (let y = 0; y < size; y++) {
-          for (let x = 0; x < size; x++) {
-            const dx = x - center + 0.5
-            const dy = y - center + 0.5
-            if (Math.hypot(dx, dy) > radius + 0.5) continue
-            const i = (y * size + x) * 4
-            inside.push([data[i], data[i + 1], data[i + 2]])
-          }
-        }
-        if (!inside.length) return ''
-        // 明度取整张图的均色，色相与彩度取按彩度加权的那一版
-        let r = 0
-        let g = 0
-        let b = 0
-        let tr = 0
-        let tg = 0
-        let tb = 0
-        let weight = 0
-        for (const pixel of inside) {
-          r += pixel[0]
-          g += pixel[1]
-          b += pixel[2]
-          const chroma = (Math.max(pixel[0], pixel[1], pixel[2]) - Math.min(pixel[0], pixel[1], pixel[2])) / 255
-          const w = chroma + 0.04
-          tr += pixel[0] * w
-          tg += pixel[1] * w
-          tb += pixel[2] * w
-          weight += w
-        }
-        const plain = [Math.floor(r / inside.length), Math.floor(g / inside.length), Math.floor(b / inside.length)]
-        if (weight <= 0) return rgbToHex(plain)
-        const tinted = [Math.round(tr / weight), Math.round(tg / weight), Math.round(tb / weight)]
-        const [h, s] = toHsl(tinted)
-        const l = toHsl(plain)[2]
-        return rgbToHex(fromHsl(h, s, clamp(l, 0.36, 0.50)))
-      }
-      return await Promise.all(list.map(measure))
-    }, sources)
+    return await page.evaluate(`(${MEASURE_ACCENTS_SCRIPT})(${JSON.stringify(sources)})`) as string[]
   } finally {
     await page.close()
   }
