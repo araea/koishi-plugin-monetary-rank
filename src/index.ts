@@ -164,6 +164,7 @@ export function apply(ctx: Context, config: Config) {
         shouldMoveIconToBarEndLeft: config.shouldMoveIconToBarEndLeft,
         gridLinesOverBars: config.gridLinesOverBars,
         valueFollowsBar: config.valueFollowsBar,
+        chartFontScale: config.chartFontScale,
       }, nicknameFontFace(ctx))
       return h.image(await screenshot(html, { fit: true }), 'image/png')
     } catch (error) {

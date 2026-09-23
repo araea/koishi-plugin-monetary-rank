@@ -29,35 +29,59 @@ const LAYOUT = {
   namePad: 10, // 名称距柱状条左端的距离
   textGap: 10, // 柱状条末端与数额之间的空隙
   columnGap: 14, // 读数排成两列时，轨道右端到数额列的空隙
-  countFontSize: 30, // 数额字号，与 acumen 的 font_size 同档
-  percentFontSize: 20, // 百分比字号，与 acumen 的 pct_font_size 同档
   percentGap: 8, // 数额与百分比之间的空隙
-  rankFontSize: 22, // 名次字号：比昵称小两档，只作次序参照
   rankGap: 12, // 名次列与头像之间的空隙
   pagePadX: 24,
   pagePadY: 24,
   iconSize: 32,
-  // 页眉：标题 32、元信息行 18、两者之间 12、到榜单 24
-  titleFontSize: 32,
-  metaFontSize: 18,
+  // 页眉：标题 32、元信息行 18（字号见 ACUMEN_FONT）、两者之间 12、到榜单 24
   headerGap: 12,
   headerMargin: 24,
 } as const
 
+/**
+ * 字号，照 acumen 的 `draw_bar_chart` 写的数（1 倍）。
+ *
+ * **这些数不能直接当 CSS px 用。** acumen 用 plotters + ab_glyph 画字，那边的「字号」
+ * 是 ab_glyph 的 PxScale——字体上伸部到下伸部的总高，不是 CSS 的 em。线上那支
+ * MiSans Medium 每 em 1000 单位，上伸 1044、下伸 282，所以写 30 实际只画出
+ * 30 × 1000 / 1326 ≈ 22.6px 的 em。从前照抄成 CSS px，整张图的字大了三成多。
+ * 出图时统一乘上 ACUMEN_EM（再乘配置里的倍率），见 fontSizes。
+ */
+const ACUMEN_FONT = {
+  count: 30, // 数额与昵称，acumen 的 font_size
+  percent: 20, // 百分比，acumen 的 pct_font_size
+  rank: 22, // 名次：比昵称小两档，只作次序参照
+  title: 32, // acumen 的 title_font_size
+  meta: 18, // acumen 的 meta_font_size
+} as const
+
+/** acumen 字号 → CSS 字号的系数，推导见 ACUMEN_FONT。message-counter 里是同一个数。 */
+const ACUMEN_EM = 1000 / (1044 + 282)
+
+/**
+ * 按倍率算出这一张图的 CSS 字号。倍率 1 即与 acumen 的发言榜同大。
+ *
+ * 标题与元信息行的行高是 acumen 给这两行留的位，只随倍率缩放，不乘 ACUMEN_EM——
+ * 这样倍率为 1 时榜单落在与 acumen 同一个纵坐标上。
+ */
+function fontSizes(scale: number) {
+  const px = (size: number) => +(size * ACUMEN_EM * scale).toFixed(2)
+  return {
+    count: px(ACUMEN_FONT.count),
+    percent: px(ACUMEN_FONT.percent),
+    rank: px(ACUMEN_FONT.rank),
+    title: px(ACUMEN_FONT.title),
+    meta: px(ACUMEN_FONT.meta),
+    titleLine: ACUMEN_FONT.title * scale,
+    metaLine: ACUMEN_FONT.meta * scale,
+    sep: px(9),
+  }
+}
+
 /** 条的圆角是条高的两成（50 的 20% = 10）。 */
 const BAR_RADIUS = 10
 const TRACK_WIDTH = LAYOUT.barMinWidth + LAYOUT.barSpan
-
-/**
- * 名次往下推的距离，让它与昵称、数额落在同一条基线上。
- *
- * 昵称与数额的 line-height 都是行高 50，基线落在行顶往下 38px 处；22px 的字居中时
- * 基线在 34.6px，差出来的这一段得显式补上——line-height 补不了，因为盒子在行里
- * 居中，行距被上下各分走一半，加多少都会互相抵消。message-counter 那边把名次直接
- * 画在昵称的基线上，所以这里也只有这一个数要跟。**这个数是量出来的**：按两边的图
- * 里名次墨迹的包围盒对齐，不是按字体度量算的。
- */
-const RANK_BASELINE_NUDGE = 2.5
 
 /**
  * 名次列的宽度。
@@ -67,11 +91,11 @@ const RANK_BASELINE_NUDGE = 2.5
  * 全错开。所以两边共用这一个模型（也就是下面 `textWidth` 估数字用的那个系数）。
  * 名次右对齐，模型比真实字宽略宽，多出来的那一点落在数字左边，看不出来。
  */
-const rankColumnWidth = (rows: number) => Math.ceil(LAYOUT.rankFontSize * 0.6 * String(rows).length)
+const rankColumnWidth = (rows: number, rankFontSize: number) => Math.ceil(rankFontSize * 0.6 * String(rows).length)
 
 /**
  * 行内文字的字体：与 acumen 的取字体顺序一致，首选系统里的 Noto Sans CJK SC
- * （acumen 的 config.toml 里 font_family 就是它）。昵称与读数同一支字体，
+ * （acumen 原先的 font_family；线上现在配的是 MiSans，但不能假定装了它）。昵称与读数同一支字体，
  * 数字不再走等宽栈——acumen 那边整张图只用一支字体。
  * 后面接 message-counter 随包带的那支，两个插件在同一台机器上落到同一支字体。
  */
@@ -293,6 +317,8 @@ export interface ChartOptions {
   gridLinesOverBars: boolean
   /** 数额与占比是否紧跟在自己那根条的尾巴后面；关闭则右对齐成固定的两列。 */
   valueFollowsBar: boolean
+  /** 字号倍率，1 即与 acumen 的发言榜同大。 */
+  chartFontScale?: number
 }
 
 const pick = (assets: Asset[], userId: string) =>
@@ -350,9 +376,10 @@ export function renderChart(title: string, subtitle: string, rows: ChartRow[], i
 
   const top = rows.reduce((max, row) => Math.max(max, row.count), 0) || 1
   const total = rows.reduce((sum, row) => sum + row.count, 0)
+  const font = fontSizes(options.chartFontScale || 1)
 
   // 名次 → 头像 → 轨道，三个纵列的左边界。名次列宽两边共用同一个模型，见 rankColumnWidth
-  const rankColW = rankColumnWidth(rows.length)
+  const rankColW = rankColumnWidth(rows.length, font.rank)
   const avatarX = rankColW + LAYOUT.rankGap
   const barX = avatarX + LAYOUT.avatarSize + LAYOUT.avatarGap
 
@@ -360,8 +387,8 @@ export function renderChart(title: string, subtitle: string, rows: ChartRow[], i
   const blocks = rows.map((row) => {
     const countText = thousands(row.count)
     const percentText = percentOf(row.count, total)
-    const countWidth = textWidth(countText, LAYOUT.countFontSize)
-    const percentWidth = percentText ? textWidth(percentText, LAYOUT.percentFontSize) : 0
+    const countWidth = textWidth(countText, font.count)
+    const percentWidth = percentText ? textWidth(percentText, font.percent) : 0
     return {
       countText,
       percentText,
@@ -443,11 +470,11 @@ export function renderChart(title: string, subtitle: string, rows: ChartRow[], i
             : ''
         }</span>`
       : `<span class="value value--col" style="left:${(valueRightX - valueColumnWidth).toFixed(1)}px;width:${valueColumnWidth.toFixed(1)}px;color:${valueInk}">${block.countText}</span>
-        <span class="value value--col" style="left:${(percentRightX - percentColumnWidth).toFixed(1)}px;width:${percentColumnWidth.toFixed(1)}px;font-size:${LAYOUT.percentFontSize}px;color:${percentInk}">${block.percentText}</span>`
+        <span class="value value--col" style="left:${(percentRightX - percentColumnWidth).toFixed(1)}px;width:${percentColumnWidth.toFixed(1)}px"><b style="color:${percentInk}">${block.percentText}</b></span>`
 
     return `
       <li class="row">
-        <span class="rank" style="width:${rankColW}px;color:${rankInk(index + 1)}">${index + 1}</span>
+        <span class="rank" style="width:${rankColW}px;color:${rankInk(index + 1)}"><span>${index + 1}</span></span>
         <img class="avatar" src="data:image/png;base64,${row.avatarBase64}">
         <span class="track" style="background:${trackCss}">
           <span class="ticks${options.gridLinesOverBars ? ' ticks--over' : ''}">${ticks}</span>
@@ -488,33 +515,36 @@ export function renderChart(title: string, subtitle: string, rows: ChartRow[], i
     .head h1 {
       margin: 0;
       font-family: ${CHART_FONT};
-      font-size: ${LAYOUT.titleFontSize}px; line-height: ${LAYOUT.titleFontSize}px;
+      font-size: ${font.title}px; line-height: ${font.titleLine}px;
       font-weight: ${EMPHASIZED_WEIGHT.headline};
       color: ${INK};
     }
     .head p {
       margin: ${LAYOUT.headerGap}px 0 0;
       font-family: ${CHART_FONT};
-      font-size: ${LAYOUT.metaFontSize}px; line-height: ${LAYOUT.metaFontSize}px;
+      font-size: ${font.meta}px; line-height: ${font.metaLine}px;
       font-weight: 400;
       color: ${INK_SOFT};
     }
     /* 分隔点自己带匀称的左右间距，不依赖字体里「·」的空腔 */
-    .head .sep { margin: 0 9px; opacity: .55; }
+    .head .sep { margin: 0 ${font.sep}px; opacity: .55; }
 
     .rows { display: flex; flex-direction: column; gap: ${LAYOUT.rowGap}px; margin: 0; padding: 0; list-style: none; }
     /* 行内的间距逐个给（gap 为 0）：名次到头像是一段，头像到轨道是另一段 */
     .row { position: relative; display: flex; align-items: center; gap: 0; height: ${LAYOUT.avatarSize}px; }
 
     /* 名次单独成列，右对齐收在头像左边。前三名是奖牌色，固定不跟主题也不跟头像走。
-       22px 的字居中时基线比昵称高出一截，这里往下推到与昵称、数额同一条基线上。 */
+       名次、昵称、读数三样字号不同，却要踩在同一条基线上（message-counter 的画布
+       就是这么画的）。办法是让它们都排在「昵称字号 + 行高 50」的行盒里：行盒的
+       基线只由外层字号定，里面小一号的字挂在同一条基线上；内层行高压成 1，
+       免得它把行盒撑高、把基线挤走。从前是按量出来的像素往下推，换一档字号就错位。 */
     .rank {
-      position: relative; top: ${RANK_BASELINE_NUDGE}px;
       flex: none; margin-right: ${LAYOUT.rankGap}px; text-align: right;
       font-family: ${CHART_FONT}; font-variant-numeric: tabular-nums;
-      font-size: ${LAYOUT.rankFontSize}px; line-height: ${LAYOUT.avatarSize}px;
+      font-size: ${font.count}px; line-height: ${LAYOUT.avatarSize}px;
       font-weight: 400;
     }
+    .rank span { font-size: ${font.rank}px; line-height: 1; }
 
     .avatar {
       width: ${LAYOUT.avatarSize}px; height: ${LAYOUT.avatarSize}px; flex: none;
@@ -553,23 +583,25 @@ export function renderChart(title: string, subtitle: string, rows: ChartRow[], i
       position: relative;
       overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
       font-family: ${CHART_FONT};
-      font-size: ${LAYOUT.countFontSize}px; line-height: ${LAYOUT.avatarSize}px;
+      font-size: ${font.count}px; line-height: ${LAYOUT.avatarSize}px;
       font-weight: 400;
     }
 
     .tail { position: absolute; z-index: 2; top: 50%; transform: translate(-100%, -50%); display: flex; align-items: center; gap: 4px; }
     .icon { position: relative; width: ${LAYOUT.iconSize}px; height: ${LAYOUT.iconSize}px; object-fit: contain; margin-left: 5px; }
 
+    /* 读数与昵称同一个行盒（整行高、昵称字号），基线自然落在一处；
+       占比小一号，挂在同一条基线上，行高压成 1 免得撑高行盒 */
     .value {
-      position: absolute; z-index: 2; top: 50%; transform: translateY(-50%);
-      display: flex; align-items: baseline; gap: ${LAYOUT.percentGap}px;
+      position: absolute; z-index: 2; top: 0;
       font-family: ${CHART_FONT}; font-variant-numeric: tabular-nums;
-      font-size: ${LAYOUT.countFontSize}px; line-height: 1;
+      font-size: ${font.count}px; line-height: ${LAYOUT.avatarSize}px;
       font-weight: 400; white-space: nowrap;
     }
-    .value b { font-size: ${LAYOUT.percentFontSize}px; font-weight: 400; }
+    .value b { margin-left: ${LAYOUT.percentGap}px; font-size: ${font.percent}px; line-height: 1; font-weight: 400; }
     /* 读数排成两列时，各自是一个定宽的盒子、右对齐 */
-    .value--col { display: block; text-align: right; }
+    .value--col { text-align: right; }
+    .value--col b { margin-left: 0; }
   </style>
 </head>
 <body>

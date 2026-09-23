@@ -11,6 +11,7 @@ export interface Config {
   shouldMoveIconToBarEndLeft?: boolean
   gridLinesOverBars?: boolean
   valueFollowsBar?: boolean
+  chartFontScale?: number
 }
 
 export const Config: Schema<Config> = Schema.intersect([
@@ -45,6 +46,8 @@ export const Config: Schema<Config> = Schema.intersect([
           .description('（样式 2）刻度竖线是否压在柱状条之上。开启（默认）则刻度贯穿整行；关闭则由柱状条盖住刻度，每根条是完整的一块颜色。两种都只差遮挡关系，文字始终在最上层。'),
         valueFollowsBar: Schema.boolean().default(true)
           .description('（样式 2）数额与占比是否紧跟在自己那根条的尾巴后面。开启（默认）时眼睛被条的颜色牵到条尾，答案就在那里；代价是二十个数字排成一串阶梯。关闭则右对齐成固定的两列，上下扫一眼就能比大小，但读完条还得横着扫到画面最右边再回头认这是哪一行。'),
+        chartFontScale: Schema.number().min(0.6).max(1.6).step(0.05).default(1)
+          .description('（样式 2）字号倍率。1 即与 acumen 的发言榜同大；标题、元信息、名次、昵称与读数一起缩放，行高、条长不变。'),
       }),
       Schema.object({}),
     ]),
