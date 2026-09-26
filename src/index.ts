@@ -18,18 +18,18 @@ export const inject = {
 
 export const usage = `## 使用
 
-在 Koishi 配置中启用，并提供 database 与 monetary 服务。图表显示需要 puppeteer 与 canvas，资源与 [message-counter](https://github.com/araea/koishi-plugin-message-counter) 共用 \`data/messageCounter/\`。
+\`mrank.本频道排行榜\` 看本频道，\`mrank.跨频道排行榜\` 看跨频道，\`mrank.查询\` 查余额。
 
 ## 指令
 
 | 指令 | 说明 |
 | --- | --- |
-| \`mrank\` | 帮助 |
-| \`mrank.本频道排行榜 [数量]\` | 本频道排行榜 |
-| \`mrank.跨频道排行榜 [数量]\` | 跨频道排行榜 |
+| \`mrank\` | 查看帮助 |
+| \`mrank.本频道排行榜 [数量]\` | 查看本频道排行 |
+| \`mrank.跨频道排行榜 [数量]\` | 查看跨频道排行 |
 | \`mrank.查询 [@某人]\` | 查询货币余额 |
 
-用 \`-c <货币种类>\` 可以临时指定货币。`
+使用 \`-c <货币种类>\` 可临时指定货币。`
 
 /** 昵称/头像同上次一致时跳过写库，避免每条消息都读写数据库。 */
 const SYNC_CACHE_MAX = 4096
