@@ -365,6 +365,9 @@ export function renderChart(title: string, subtitle: string, rows: ChartRow[], i
   const top = rows.reduce((max, row) => Math.max(max, row.count), 0) || 1
   const total = rows.reduce((sum, row) => sum + row.count, 0)
   const font = fontSizes(options.chartFontScale || 1)
+  // 昵称视觉上移，与 message-counter 的画布同一个数（那里是 LAYOUT.nameRise）：
+  // 同一基线下数字字形偏上、中日韩字形偏下，昵称看着比读数矮一截。只抬昵称，读数与名次不动。
+  const nameRise = Math.round(font.count * 0.1)
 
   // 名次 → 头像 → 轨道，三个纵列的左边界。名次列宽两边共用同一个模型，见 rankColumnWidth
   const rankColW = rankColumnWidth(rows.length, font.rank)
@@ -568,7 +571,7 @@ export function renderChart(title: string, subtitle: string, rows: ChartRow[], i
     .wash { position: absolute; inset: 0; background-size: cover; background-position: center; }
 
     .name {
-      position: relative;
+      position: relative; top: -${nameRise}px;
       overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
       font-family: ${CHART_FONT};
       font-size: ${font.count}px; line-height: ${LAYOUT.avatarSize}px;
