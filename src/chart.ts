@@ -1,6 +1,6 @@
 import { h } from 'koishi'
 import { Asset, NICKNAME_FONT } from './assets'
-import { baseline, EMPHASIZED_WEIGHT, scheme } from './m3'
+import { baseline, EMPHASIZED_WEIGHT, scheme, harmonize, CHART_TYPE, LEGACY_CHART_SIZE, FONT_STACK } from './m3'
 
 /*
  * 这张榜与 message-counter 的水平柱状榜共用一套版式与一套配色。
@@ -9,7 +9,7 @@ import { baseline, EMPHASIZED_WEIGHT, scheme } from './m3'
  * 所以不只版式逐项对齐，颜色也照搬 acumen 的 `chart/utils.rs`：同一支头像色
  * 算出来的条色、轨道、读数与占比，三边必须逐位相同。下面是那套运算的搬字版。
  *
- * SCHEME 只留给 `baseline()` 排版重置用，页面上看得见的颜色全部来自下面的常量。
+ * 配色与页面排版统一来自共享 M3 角色令牌。
  */
 const HUE = 268
 const SCHEME = scheme(HUE)
@@ -48,13 +48,7 @@ const LAYOUT = {
  * 30 × 1000 / 1326 ≈ 22.6px 的 em。从前照抄成 CSS px，整张图的字大了三成多。
  * 出图时统一乘上 ACUMEN_EM（再乘配置里的倍率），见 fontSizes。
  */
-const ACUMEN_FONT = {
-  count: 30, // 数额与昵称，acumen 的 font_size
-  percent: 20, // 百分比，acumen 的 pct_font_size
-  rank: 22, // 名次：比昵称小两档，只作次序参照
-  title: 32, // acumen 的 title_font_size
-  meta: 18, // acumen 的 meta_font_size
-} as const
+const ACUMEN_FONT = { count: 30, percent: 20, rank: 22, title: 32, meta: 18 } as const
 
 /** acumen 字号 → CSS 字号的系数，推导见 ACUMEN_FONT。message-counter 里是同一个数。 */
 const ACUMEN_EM = 1000 / (1044 + 282)
@@ -66,7 +60,7 @@ const ACUMEN_EM = 1000 / (1044 + 282)
  * 这样倍率为 1 时榜单落在与 acumen 同一个纵坐标上。
  */
 function fontSizes(scale: number) {
-  const px = (size: number) => +(size * ACUMEN_EM * scale).toFixed(2)
+  const px = (size: number) => +((LEGACY_CHART_SIZE[size] ?? size) * scale).toFixed(2)
   return {
     count: px(ACUMEN_FONT.count),
     percent: px(ACUMEN_FONT.percent),
@@ -99,7 +93,7 @@ const rankColumnWidth = (rows: number, rankFontSize: number) => Math.ceil(rankFo
  * 数字不再走等宽栈——acumen 那边整张图只用一支字体。
  * 后面接 message-counter 随包带的那支，两个插件在同一台机器上落到同一支字体。
  */
-const CHART_FONT = `"Noto Sans CJK SC", "${NICKNAME_FONT}", "Microsoft YaHei", sans-serif`
+const CHART_FONT = FONT_STACK
 
 /*
  * ── 以下是 acumen `src/plugins/stats/chart/utils.rs` 与 `renderer.rs` 的搬字版 ──
@@ -109,20 +103,20 @@ const CHART_FONT = `"Noto Sans CJK SC", "${NICKNAME_FONT}", "Microsoft YaHei", s
  */
 
 /** 页面与文字的纸色、墨色，取自 acumen 的 `ColorScheme::default`（scheme-manual）。 */
-const PAPER = '#fffefa' // surface，页面底色
-const INK = '#1f2a27' // on-surface，标题
-const INK_SOFT = '#4f5c57' // on-surface-variant，元信息行
+const PAPER = SCHEME.surface // surface，页面底色
+const INK = SCHEME.onSurface // on-surface，标题
+const INK_SOFT = SCHEME.onSurfaceVariant // on-surface-variant，元信息行
 /** on-surface-faint 在暖白纸上差一线（4.44∶1），这是它过 4.5∶1 之后的值，
  *  即 acumen 的 `ColorScheme::readable_faint()`：名次这类参照数字的墨色。 */
-const INK_FAINT = '#66726d'
+const INK_FAINT = SCHEME.onSurfaceVariant
 /** 刻度竖线：8% 的黑，压在轨道或实色条上都读得出来。 */
 const HAIRLINE = 'rgba(0, 0, 0, 0.08)'
 /** 头像底下那圈发丝细的边：不透明的 outline-variant，垫在头像下面。 */
-const GRID_LINE = '#dee5df'
+const GRID_LINE = SCHEME.outlineVariant
 /** 前三名的名次色：金、银、铜。含义在颜色本身，不跟主题也不跟头像走。 */
-const MEDALS = ['#8a640a', '#687076', '#8c5834']
+const MEDALS = [SCHEME.primary, SCHEME.secondary, SCHEME.tertiary]
 /** 取不到头像时的兜底色，即 acumen 的 `FALLBACK_THEME`（主色）。 */
-const FALLBACK_THEME = '#1f6350'
+const FALLBACK_THEME = SCHEME.primary
 
 type Rgb = [number, number, number]
 
@@ -254,20 +248,14 @@ function atLuminance(h: number, s: number, target: number): Rgb {
 
 /** 主题色只留色相，彩度收进窄带，亮度归一到 BAR_LUMINANCE。 */
 function harmonizeTheme(color: Rgb): Rgb {
-  const [h, s] = toHsl(color)
-  const chroma = (Math.max(color[0], color[1], color[2]) - Math.min(color[0], color[1], color[2])) / 255
-  // 彩度低到读不出方向的头像退到固定的回退色相，但彩度压到窄带之下：
-  // 一张本来就没有颜色的头像，不该因为「没有颜色」反而成为整张榜上最扎眼的一条。
-  if (chroma < HUE_NOISE_FLOOR) return atLuminance(fallbackHue(), 0.08, BAR_LUMINANCE)
-  return atLuminance(h, clamp(s, MIN_SATURATION, MAX_SATURATION), BAR_LUMINANCE)
+  return hexToRgb(harmonize('#' + color.map(v => Math.round(v).toString(16).padStart(2, '0')).join(''), 45, 36, HUE))
 }
 
 /** 这一行的淡色轨道：同一支色相，亮度归一到 TRACK_LUMINANCE。
  *  「混一半白」得到的是固定的比例、不是固定的对比度：一支本来就亮的黄，混一半白
  *  之后与自己只差 1.50∶1，条尾在哪根本看不出来。 */
 function trackTone(bar: Rgb): Rgb {
-  const [h, s] = toHsl(bar)
-  return atLuminance(h, s, TRACK_LUMINANCE)
+  return hexToRgb(harmonize('#' + bar.map(v => Math.round(v).toString(16).padStart(2, '0')).join(''), 90, 24, HUE))
 }
 
 const mixWithWhite = (color: Rgb, opacity: number): Rgb =>

@@ -1,13 +1,16 @@
 {
   "name": "koishi-plugin-monetary-rank",
   "description": "Koishi 货币排行榜：查询余额并生成频道或跨频道排行榜。",
-  "version": "3.5.0",
+  "version": "3.6.0",
   "main": "lib/index.js",
   "typings": "lib/index.d.ts",
   "files": [
     "lib",
     "LICENSE-APACHE",
-    "LICENSE-MIT"
+    "LICENSE-MIT",
+    "DESIGN_SYSTEM.md",
+    "CHANGELOG.md",
+    "THIRD_PARTY_NOTICES.md"
   ],
   "koishi": {
     "service": {
@@ -44,5 +47,8 @@
   ],
   "peerDependencies": {
     "koishi": "^4.18.11"
+  },
+  "scripts": {
+    "check:design": "node scripts/check-design-system.mjs"
   }
 }

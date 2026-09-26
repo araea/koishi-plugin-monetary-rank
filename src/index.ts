@@ -1,3 +1,4 @@
+import { usePresentation } from './ux'
 import { Context, h, Session } from 'koishi'
 import {} from 'koishi-plugin-puppeteer'
 import {} from '@koishijs/canvas'
@@ -17,7 +18,7 @@ export const inject = {
 
 export const usage = `## 使用
 
-在 Koishi 配置中启用，并提供 database 与 monetary 服务；另需启用 \`bind\` 插件。图表显示需要 puppeteer 与 canvas，资源与 [message-counter](https://github.com/araea/koishi-plugin-message-counter) 共用 \`data/messageCounter/\`。
+在 Koishi 配置中启用，并提供 database 与 monetary 服务。图表显示需要 puppeteer 与 canvas，资源与 [message-counter](https://github.com/araea/koishi-plugin-message-counter) 共用 \`data/messageCounter/\`。
 
 ## 指令
 
@@ -34,6 +35,7 @@ export const usage = `## 使用
 const SYNC_CACHE_MAX = 4096
 
 export function apply(ctx: Context, config: Config) {
+  const presentation = usePresentation(ctx, 'mrank')
   const logger = ctx.logger(name)
   defineTables(ctx)
 
@@ -106,28 +108,28 @@ export function apply(ctx: Context, config: Config) {
   }
 
   /**
-   * 文本榜单。整条消息五行封顶：标题一行，内容最多四行，更多时压到三行并留一行尾注。
+   * 文本榜单。文字榜单保留全部请求条目及货币单位。
    * 昵称可能带尖括号，用 h.text 包住避免被当成消息元素解析。
    */
-  function textBoard(title: string, rows: RankEntry[]) {
-    const shown = rows.length > 4 ? rows.slice(0, 3) : rows
+  function textBoard(title: string, rows: RankEntry[], currency: string) {
+    const shown = rows
     const hidden = rows.length - shown.length
     return h.text([
       `📋 ${title}`,
-      ...shown.map((row, index) => `${index + 1}. ${row.username}（${row.userId}） · ${row.value}`),
+      ...shown.map((row, index) => `${index + 1}. ${row.username}（${row.userId}） · ${row.value} ${currency}`),
       hidden > 0 ? `…… 另有 ${hidden} 人未列` : null,
     ].filter(Boolean).join('\n'))
   }
 
   async function present(session: Session, title: string, currency: string, rows: RankEntry[]) {
     if (!rows.length) return '📋 排行榜还空着\n这里按余额排名，有人持有货币后就会出现。\n发送「mrank.查询」看自己的余额。'
-    if (!config.isLeaderboardDisplayedAsImage || !ctx.puppeteer) {
-      return textBoard(title, rows)
+    if (!config.isLeaderboardDisplayedAsImage || !ctx.puppeteer || presentation.textOnly(session)) {
+      return textBoard(title, rows, currency)
     }
 
     try {
       if (config.style === '3') {
-        return h.image(await screenshot(renderCard(title, rows, currency), { width: 560, scale: 2 }), 'image/png')
+        return presentation.present(session, h.image(await screenshot(renderCard(title, rows, currency), { width: 560, scale: 2 }), 'image/png'), textBoard(title, rows, currency))
       }
       const chartRows = await Promise.all(rows.map(async (row) => {
         const avatar = await loadAvatar(row.avatar)
@@ -166,10 +168,10 @@ export function apply(ctx: Context, config: Config) {
         valueFollowsBar: config.valueFollowsBar,
         chartFontScale: config.chartFontScale,
       }, nicknameFontFace(ctx))
-      return h.image(await screenshot(html, { fit: true }), 'image/png')
+      return presentation.present(session, h.image(await screenshot(html, { fit: true }), 'image/png'), textBoard(title, rows, currency))
     } catch (error) {
       logger.error('生成排行榜图片失败：%s', error.stack || error.message)
-      return textBoard(title, rows)
+      return textBoard(title, rows, currency)
     }
   }
 
@@ -204,7 +206,7 @@ export function apply(ctx: Context, config: Config) {
       const who = userId === session.userId ? ['你'] : [h.at(userId), ' ']
       const [binding] = await ctx.database.get('binding', { pid: userId, platform: session.platform })
       if (!binding) {
-        return ['💡 ', ...who, '还没有账户\n货币账户由 `bind` 插件在首次绑定时创建。\n发送「bind」绑定后，余额就会出现在这里。']
+        return ['💡 ', ...who, '还没有货币账户\n参与支持通用货币的功能后再查询；如需迁移账户，请联系管理员。']
       }
 
       const records = await ctx.database.get('monetary', options.currency
@@ -220,7 +222,7 @@ export function apply(ctx: Context, config: Config) {
         return ['📋 ', ...who, `的 ${records[0].currency} 余额为 ${records[0].value}。`]
       }
       const lines = records.map((row) => `• ${row.currency}：${row.value}`)
-      const shown = lines.length > 4 ? lines.slice(0, 3) : lines
+      const shown = lines
       const hidden = lines.length - shown.length
       const body = shown.join('\n') + (hidden > 0 ? `\n…… 另有 ${hidden} 种未列` : '')
       return ['📋 ', ...who, '的货币余额：\n', body]

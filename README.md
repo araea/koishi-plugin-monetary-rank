@@ -24,3 +24,9 @@ yarn add koishi-plugin-monetary-rank
 ## 许可证
 
 可按 [Apache-2.0](LICENSE-APACHE) 或 [MIT](LICENSE-MIT) 使用。
+
+## 显示与交互
+
+发送 `mrank.显示 文字` 或 `mrank.显示 图文` 切换个人显示偏好。同一机器人中的配套插件共享选择，重启后恢复图文。图文模式中的信息图片附带文字说明；作品素材与感官测试的适用边界见 [设计系统](./DESIGN_SYSTEM.md)。
+
+本次更新：M3 图表角色与 HCT 配色；完整文字排行榜附货币单位；修正账户提示与样式命名。

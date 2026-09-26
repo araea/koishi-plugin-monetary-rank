@@ -31,8 +31,8 @@ export const Config: Schema<Config> = Schema.intersect([
       Schema.object({
         isLeaderboardDisplayedAsImage: Schema.const(true).required(),
         style: Schema.union([
-          Schema.const('2').description('样式 2（水平柱状图）'),
-          Schema.const('3').description('样式 3（deer-pipe 卡片样式）'),
+          Schema.const('2').description('水平柱状排行榜'),
+          Schema.const('3').description('紧凑卡片排行榜'),
         ]).role('radio').default('2').description('排行榜样式。'),
         waitUntil: Schema.union(['load', 'domcontentloaded', 'networkidle0', 'networkidle2'])
           .default('networkidle0').description('截图前等待的页面加载事件。'),
@@ -47,7 +47,7 @@ export const Config: Schema<Config> = Schema.intersect([
         valueFollowsBar: Schema.boolean().default(true)
           .description('（样式 2）数额与占比是否紧跟在自己那根条的尾巴后面。开启（默认）时眼睛被条的颜色牵到条尾，答案就在那里；代价是二十个数字排成一串阶梯。关闭则右对齐成固定的两列，上下扫一眼就能比大小，但读完条还得横着扫到画面最右边再回头认这是哪一行。'),
         chartFontScale: Schema.number().min(0.6).max(1.6).step(0.05).default(1)
-          .description('（样式 2）字号倍率。1 即与 acumen 的发言榜同大；标题、元信息、名次、昵称与读数一起缩放，行高、条长不变。'),
+          .description('（样式 2）字号倍率。1 即使用标准图表字号；标题、元信息、名次、昵称与读数一起缩放，行高、条长不变。'),
       }),
       Schema.object({}),
     ]),
