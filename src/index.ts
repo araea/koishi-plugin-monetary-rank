@@ -1,4 +1,4 @@
-import { usePresentation } from './ux'
+import { present as imageOrText } from './ux'
 import { Context, h, Session } from 'koishi'
 import {} from 'koishi-plugin-puppeteer'
 import {} from '@koishijs/canvas'
@@ -35,7 +35,6 @@ export const usage = `## 使用
 const SYNC_CACHE_MAX = 4096
 
 export function apply(ctx: Context, config: Config) {
-  const presentation = usePresentation(ctx, 'mrank')
   const logger = ctx.logger(name)
   defineTables(ctx)
 
@@ -123,13 +122,13 @@ export function apply(ctx: Context, config: Config) {
 
   async function present(session: Session, title: string, currency: string, rows: RankEntry[]) {
     if (!rows.length) return '📋 排行榜还空着\n这里按余额排名，有人持有货币后就会出现。\n发送「mrank.查询」看自己的余额。'
-    if (!config.isLeaderboardDisplayedAsImage || !ctx.puppeteer || presentation.textOnly(session)) {
+    if (!config.isLeaderboardDisplayedAsImage || !ctx.puppeteer) {
       return textBoard(title, rows, currency)
     }
 
     try {
       if (config.style === '3') {
-        return presentation.present(session, h.image(await screenshot(renderCard(title, rows, currency), { width: 560, scale: 2 }), 'image/png'), textBoard(title, rows, currency))
+        return imageOrText(h.image(await screenshot(renderCard(title, rows, currency), { width: 560, scale: 2 }), 'image/png'), textBoard(title, rows, currency))
       }
       const chartRows = await Promise.all(rows.map(async (row) => {
         const avatar = await loadAvatar(row.avatar)
@@ -168,7 +167,7 @@ export function apply(ctx: Context, config: Config) {
         valueFollowsBar: config.valueFollowsBar,
         chartFontScale: config.chartFontScale,
       }, nicknameFontFace(ctx))
-      return presentation.present(session, h.image(await screenshot(html, { fit: true }), 'image/png'), textBoard(title, rows, currency))
+      return imageOrText(h.image(await screenshot(html, { fit: true }), 'image/png'), textBoard(title, rows, currency))
     } catch (error) {
       logger.error('生成排行榜图片失败：%s', error.stack || error.message)
       return textBoard(title, rows, currency)
