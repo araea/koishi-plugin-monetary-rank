@@ -31,6 +31,11 @@ const LAYOUT = {
   columnGap: 14, // 读数排成两列时，轨道右端到数额列的空隙
   percentGap: 8, // 数额与百分比之间的空隙
   rankGap: 12, // 名次列与头像之间的空隙
+  // 条尾的把手（M3E 滑块的 handle）：窄的竖向胶囊，两侧各让出一道纸色的缝，
+  // 上下各探出条外一点。与 acumen、message-counter 同数。
+  handleWidth: 4,
+  handleGap: 3,
+  handleOverhang: 3,
   pagePadX: 24,
   pagePadY: 24,
   iconSize: 32,
@@ -109,8 +114,8 @@ const INK_SOFT = SCHEME.onSurfaceVariant // on-surface-variant，元信息行
 /** on-surface-faint 在暖白纸上差一线（4.44∶1），这是它过 4.5∶1 之后的值，
  *  即 acumen 的 `ColorScheme::readable_faint()`：名次这类参照数字的墨色。 */
 const INK_FAINT = SCHEME.onSurfaceVariant
-/** 刻度竖线：8% 的黑，压在轨道或实色条上都读得出来。 */
-const HAIRLINE = 'rgba(0, 0, 0, 0.08)'
+/** 刻度竖线：5% 的黑，与 acumen 同一档。条是浅色容器，再深就比条尾的把手抢眼。 */
+const HAIRLINE = 'rgba(0, 0, 0, 0.05)'
 /** 头像底下那圈发丝细的边：不透明的 outline-variant，垫在头像下面。 */
 const GRID_LINE = SCHEME.outlineVariant
 /** 前三名的名次色：金、银、铜。含义在颜色本身，不跟主题也不跟头像走。 */
@@ -133,36 +138,6 @@ const rgbToHex = (color: Rgb) =>
 
 /** Rust 里 `x as u8` 是截断，不是四舍五入。 */
 const to8 = (value: number) => clamp(Math.trunc(value), 0, 255)
-
-/** RGB → HSL，H 为 0—360，S/L 为 0—1。 */
-function toHsl(color: Rgb): Rgb {
-  const [r, g, b] = color.map((value) => value / 255) as Rgb
-  const max = Math.max(r, g, b)
-  const min = Math.min(r, g, b)
-  const l = (max + min) / 2
-  const d = max - min
-  if (Math.abs(d) < 1e-6) return [0, 0, l]
-  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min)
-  const h = max === r
-    ? 60 * (((g - b) / d) % 6)
-    : max === g
-      ? 60 * ((b - r) / d + 2)
-      : 60 * ((r - g) / d + 4)
-  return [(h + 360) % 360, s, l]
-}
-
-/** HSL → RGB。 */
-function fromHsl(h: number, s: number, l: number): Rgb {
-  const c = (1 - Math.abs(2 * l - 1)) * s
-  const hp = (h % 360) / 60
-  const x = c * (1 - Math.abs((hp % 2) - 1))
-  const [r, g, b] = hp < 1 ? [c, x, 0] : hp < 2 ? [x, c, 0] : hp < 3 ? [0, c, x] : hp < 4 ? [0, x, c] : hp < 5 ? [x, 0, c] : [c, 0, x]
-  const m = l - c / 2
-  const channel = (value: number) => clamp(Math.round(clamp(value + m, 0, 1) * 255), 0, 255)
-  return [channel(r), channel(g), channel(b)]
-}
-
-const yiq = (color: Rgb) => (color[0] * 299 + color[1] * 587 + color[2] * 114) / 1000
 
 // ── 对比度：可达性，不是风格 ──
 // 阈值由 WCAG 2.2 定，正文 4.5∶1，大字与图形元素 3∶1。条色来自头像，什么都可能，
@@ -212,77 +187,29 @@ function ensureContrast(fg: Rgb, bg: Rgb, minRatio: number): Rgb {
 
 // ── 同一支色相里的调子 ──
 //
-// M3 的 tonal palette 用感知明度把同一档上的所有色相归到一样重。这里用 WCAG 的相对
-// 亮度做同样的归一：HSL 明度不是视觉亮度，同一条明度带上黄比紫亮将近三倍，于是黄绿
-// 那几行在榜上永远比别人扎眼，整张图的重量忽轻忽重。
+// 一行的五个调子，与 acumen 的 chart/utils.rs、message-counter 的画布同一张表
+// （tone 即 HCT 的 L*）：
+//
+//     轨道 T94 → 条 T84（container）→ 把手 T40 → 名字与读数 T30（on-container）
+//
+// 条是浅而有色的容器，名字取同一支色相的深调，跟着条色走；tone 之间的对比度与色相
+// 无关，T30 在 T84 上恒为 6.2∶1。条与轨道只差 1.3∶1，条尾交给把手，它对条、轨道、
+// 纸面都过 WCAG 2.2 非文字元素的 3∶1。
 
-/** 实色条的目标亮度：相对亮度 0.16。 */
-const BAR_LUMINANCE = 0.16
-/** 淡色轨道的目标亮度：与条色的对比度约 3.5∶1，过非文字元素的 3∶1。 */
-const TRACK_LUMINANCE = 0.68
-/** 彩度上限与下限：亮度归一之后，各行之间剩下的差别只有色相与彩度。 */
-const MAX_SATURATION = 0.30
-const MIN_SATURATION = 0.16
-/**
- * 读不出色相的下限：RGB 三分量的极差（彩度）不到这个比例，剩下的方向就是噪声。
- *
- * 判彩度要看极差，不能看 HSL 的 S：雪白的自拍三分量只差 10，HSL 却因为明度贴着顶
- * 而算出 0.23 的饱和度——照着它染，一张白头像会得到一条橘色的条。
- */
-const HUE_NOISE_FLOOR = 0.02
+const tone = (color: Rgb, t: number, chroma: number): Rgb => hexToRgb(harmonize(rgbToHex(color), t, chroma, HUE))
 
-/** 回退色相：系统主色的那一支。灰头像不是「没有颜色」，是「没有自己的颜色」。 */
-const fallbackHue = () => toHsl(hexToRgb(FALLBACK_THEME))[0]
-
-/** 定住色相与饱和度，把明度推到指定的相对亮度上。相对亮度对 HSL 明度单调，二分即可。 */
-function atLuminance(h: number, s: number, target: number): Rgb {
-  let low = 0
-  let high = 1
-  for (let i = 0; i < 24; i++) {
-    const mid = (low + high) / 2
-    if (relativeLuminance(fromHsl(h, s, mid)) < target) low = mid
-    else high = mid
-  }
-  return fromHsl(h, s, (low + high) / 2)
-}
-
-/** 主题色只留色相，彩度收进窄带，亮度归一到 BAR_LUMINANCE。 */
-function harmonizeTheme(color: Rgb): Rgb {
-  return hexToRgb(harmonize('#' + color.map(v => Math.round(v).toString(16).padStart(2, '0')).join(''), 45, 36, HUE))
-}
-
-/** 这一行的淡色轨道：同一支色相，亮度归一到 TRACK_LUMINANCE。
- *  「混一半白」得到的是固定的比例、不是固定的对比度：一支本来就亮的黄，混一半白
- *  之后与自己只差 1.50∶1，条尾在哪根本看不出来。 */
-function trackTone(bar: Rgb): Rgb {
-  return hexToRgb(harmonize('#' + bar.map(v => Math.round(v).toString(16).padStart(2, '0')).join(''), 90, 24, HUE))
-}
-
-const mixWithWhite = (color: Rgb, opacity: number): Rgb =>
-  color.map((value) => to8(value * opacity + 255 * (1 - opacity))) as Rgb
+/** 条：头像主色只留色相，落到 T84 的容器色。 */
+const harmonizeTheme = (color: Rgb) => tone(color, 84, 16)
+/** 条尾之后那一截轨道：同一支色相，淡到只剩一点。 */
+const trackTone = (bar: Rgb) => tone(bar, 94, 6)
+/** 条尾的把手：同一支色相的中深调。 */
+const handleTone = (bar: Rgb) => tone(bar, 40, 32)
+/** 条上的名字与条外的读数：同一支色相的深调；最后过一遍阈值，挡住取整的万一。 */
+const onBarInk = (bar: Rgb) => ensureContrast(tone(bar, 30, 28), bar, 4.5)
 
 const mixWithColor = (color: Rgb, base: Rgb, opacity: number): Rgb => {
   const t = clamp(opacity, 0, 1)
   return color.map((value, i) => to8(value * t + base[i] * (1 - t))) as Rgb
-}
-
-/** 同色相的深调：给淡底上的字用。一次压暗对本来就很浅的色还不够，
- *  再压到 YIQ 亮度 96 以下为止。 */
-function deepTone(color: Rgb, strength: number): Rgb {
-  const black: Rgb = [0, 0, 0]
-  let out = mixWithColor(color, black, clamp(strength, 0.05, 1))
-  for (let i = 0; i < 4; i++) {
-    if (yiq(out) <= 96) break
-    out = mixWithColor(out, black, 0.75)
-  }
-  return out
-}
-
-/** 实色条上的字色。纯白/纯黑盖在彩色上像两片贴纸；取同色相的极浅调或极深调，
- *  对比度一样够，字却像是从这块颜色里长出来的。最后一律过一遍阈值再交出去。 */
-function contrastInk(bg: Rgb): Rgb {
-  const seed = prefersDarkInk(bg) ? deepTone(bg, 0.26) : mixWithWhite(bg, 0.10)
-  return ensureContrast(seed, bg, 4.5)
 }
 
 /** 第 rank 名（从 1 起）该用的墨色：前三名是奖牌色，其余是弱化的前景色。 */
@@ -397,7 +324,7 @@ export function renderChart(title: string, subtitle: string, rows: ChartRow[], i
   const percentColumnWidth = blocks.reduce((max, block) => Math.max(max, block.percentWidth), 0)
   const trackEndX = barX + TRACK_WIDTH
   const numbersWidth = followsBar
-    ? LAYOUT.textGap + widest
+    ? LAYOUT.handleGap + LAYOUT.textGap + widest
     : LAYOUT.columnGap + valueColumnWidth + LAYOUT.percentGap + percentColumnWidth
   // 页面宽度则按最长的那串数额撑开，读数不会溢出
   const pageWidth = Math.ceil(barX + TRACK_WIDTH + numbersWidth + LAYOUT.pagePadX * 2)
@@ -420,22 +347,26 @@ export function renderChart(title: string, subtitle: string, rows: ChartRow[], i
     // 数字踩在什么底上，就按什么底量对比度：跟着条尾时压在淡色轨道上
     // （榜首那一行越过轨道落在纸上，纸更浅，一并够）；排成两列时全在纸上。
     const ground = followsBar ? track : hexToRgb(PAPER)
-    const valueTone = ensureContrast(deepTone(bar, 0.34), ground, 4.5)
+    const nameTone = onBarInk(bar)
+    const valueTone = ensureContrast(nameTone, ground, 4.5)
     const accent = rgbToHex(bar)
     const trackCss = rgbToHex(track)
     const valueInk = rgbToHex(valueTone)
     // 占比是次要信息：把数额的墨往底色里调一点，同一支色相退半档，
     // 退到刚好还在正文阈值上为止
     const percentInk = rgbToHex(ensureContrast(mixWithColor(valueTone, ground, 0.62), ground, 4.5))
-    const nameInk = rgbToHex(contrastInk(bar))
+    const nameInk = rgbToHex(nameTone)
+    const handleCss = rgbToHex(handleTone(bar))
 
     // 条长取整：浏览器本来就会把盒子的边落到整像素，写出来是为了与
     // message-counter 的画布版落到同一个数——两张榜的条尾、读数与名字要同起点。
     const barWidth = Math.round(LAYOUT.barMinWidth + (LAYOUT.barSpan * row.count) / top)
+    // 条本身收在把手左侧那道缝之前；barWidth 仍是条尾（把手右缘）的位置
+    const fillWidth = barWidth - LAYOUT.handleWidth - LAYOUT.handleGap
     const block = blocks[index]
 
     // 读数紧跟条尾，落在轨道里或轨道外的纸面上，位置不跟着轨道右端变
-    const textX = barX + barWidth + LAYOUT.textGap
+    const textX = barX + barWidth + LAYOUT.handleGap + LAYOUT.textGap
 
     const chosen = pick(backgrounds, row.userId)
     const background = chosen.length ? chosen[Math.floor(Math.random() * chosen.length)] : ''
@@ -451,7 +382,7 @@ export function renderChart(title: string, subtitle: string, rows: ChartRow[], i
       .map((base64) => `<img class="icon" src="data:image/png;base64,${base64}">`).join('')
     // 名字能用满整根条：只有这个人确实挂了图标，才给图标留出那一格
     const reserve = badges ? 44 : LAYOUT.namePad
-    const nameRoom = Math.max(0, barWidth - LAYOUT.namePad - reserve)
+    const nameRoom = Math.max(0, fillWidth - LAYOUT.namePad - reserve)
 
     // 读数跟着条尾时是一串（数额 + 占比），排成两列时是各自右对齐的两个盒子
     const valueBlock = followsBar
@@ -470,15 +401,16 @@ export function renderChart(title: string, subtitle: string, rows: ChartRow[], i
         <span class="track" style="background:${trackCss}">
           <span class="ticks${options.gridLinesOverBars ? ' ticks--over' : ''}">${ticks}</span>
           ${fullLayer}
-          <span class="bar" style="width:${barWidth}px;background:${accent}">
+          <span class="bar" style="width:${fillWidth}px;background:${accent}">
             ${barLayer}
             <span class="name" style="max-width:${nameRoom.toFixed(1)}px;color:${nameInk}">${h.escape(row.name)}</span>
             ${options.shouldMoveIconToBarEndLeft ? '' : badges}
           </span>
           ${options.shouldMoveIconToBarEndLeft && badges
-            ? `<span class="tail" style="left:${barWidth - LAYOUT.namePad / 2}px">${badges}</span>`
+            ? `<span class="tail" style="left:${fillWidth - LAYOUT.namePad / 2}px">${badges}</span>`
             : ''}
         </span>
+        <span class="handle" style="left:${barX + barWidth - LAYOUT.handleWidth}px;background:${handleCss}"></span>
         ${valueBlock}
       </li>`
   }).join('')
@@ -576,6 +508,17 @@ export function renderChart(title: string, subtitle: string, rows: ChartRow[], i
       font-family: ${CHART_FONT};
       font-size: ${font.count}px; line-height: ${LAYOUT.avatarSize}px;
       font-weight: 400;
+    }
+
+    /* 条尾的把手：条是浅色容器、与轨道只差 1.3∶1，条尾在哪由它交代——对条、轨道、
+       纸面都过 WCAG 2.2 非文字元素的 3∶1。两侧那道纸色的缝用一圈纸色的描边让出来；
+       榜首那一行的把手落在轨道尽头，右侧的缝正好把轨道的圆角让出去。 */
+    .handle {
+      position: absolute; z-index: 3;
+      top: -${LAYOUT.handleOverhang}px; bottom: -${LAYOUT.handleOverhang}px;
+      width: ${LAYOUT.handleWidth}px;
+      border-radius: ${LAYOUT.handleWidth / 2}px;
+      box-shadow: 0 0 0 ${LAYOUT.handleGap}px ${PAPER};
     }
 
     .tail { position: absolute; z-index: 2; top: 50%; transform: translate(-100%, -50%); display: flex; align-items: center; gap: 4px; }
