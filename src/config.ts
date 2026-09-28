@@ -3,6 +3,7 @@ import { Schema } from 'koishi'
 export interface Config {
   defaultCurrency: string
   defaultLeaderboardDisplayCount: number
+  maxLeaderboardDisplayCount: number
   isLeaderboardDisplayedAsImage: boolean
   style?: '2' | '3'
   waitUntil?: 'load' | 'domcontentloaded' | 'networkidle0' | 'networkidle2'
@@ -20,6 +21,8 @@ export const Config: Schema<Config> = Schema.intersect([
       .description('默认统计的货币种类，各指令均可用 `-c` 临时指定。'),
     defaultLeaderboardDisplayCount: Schema.natural().min(1).default(10)
       .description('排行榜默认显示的人数。'),
+    maxLeaderboardDisplayCount: Schema.natural().default(100)
+      .description('排行榜最多显示的人数：指令后面的数字超过它按它出图，0 表示不设上限。一行约 60 像素，100 名已是六千像素的长图。'),
   }).description('排行榜设置'),
 
   Schema.intersect([

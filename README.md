@@ -30,6 +30,7 @@ npm i koishi-plugin-monetary-rank
 | --- | --- | --- | --- |
 | `defaultCurrency` | string | `default` | 默认统计的货币种类 |
 | `defaultLeaderboardDisplayCount` | number | `10` | 排行榜默认显示的人数 |
+| `maxLeaderboardDisplayCount` | number | `100` | 排行榜最多显示的人数，指令后的数字超过按它出图；0 表示不设上限 |
 | `isLeaderboardDisplayedAsImage` | boolean | `false` | 把排行榜渲染成图片 |
 | `style` | `2` / `3` | `2` | 图片样式：`2` 水平柱状，`3` 紧凑卡片 |
 | `waitUntil` | string | `networkidle0` | 截图前等待的页面加载事件 |

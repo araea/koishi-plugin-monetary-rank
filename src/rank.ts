@@ -35,6 +35,15 @@ async function decorate(ctx: Context, platform: string, rows: { uid: number; val
   })
 }
 
+/**
+ * 这一张榜列多少名：指令给了就用指令的，没给用默认值；再收进上限。
+ * 上限配成 0 表示不设上限，保留从前的行为。
+ */
+export function displayLimit(requested: number | undefined, fallback: number, max: number) {
+  const n = requested || fallback
+  return max > 0 ? Math.min(n, max) : n
+}
+
 /** 全平台按余额排序的前 N 名。 */
 export async function globalRank(ctx: Context, platform: string, currency: string, limit: number) {
   const rows = await ctx.database

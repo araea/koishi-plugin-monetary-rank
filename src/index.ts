@@ -7,7 +7,7 @@ import { renderCard } from './card'
 import { renderChart } from './chart'
 import { Config } from './config'
 import { defineTables, RankEntry } from './model'
-import { channelRank, globalRank } from './rank'
+import { channelRank, displayLimit, globalRank } from './rank'
 
 export { Config }
 export const name = 'monetary-rank'
@@ -182,7 +182,7 @@ export function apply(ctx: Context, config: Config) {
   cmd.subcommand('.本频道排行榜 [count:posint]', '查看本频道排行榜')
     .option('currency', '-c <currency:string> 指定货币种类')
     .action(async ({ session, options }, count) => {
-      const limit = count || config.defaultLeaderboardDisplayCount
+      const limit = displayLimit(count, config.defaultLeaderboardDisplayCount, config.maxLeaderboardDisplayCount)
       const currency = options.currency || config.defaultCurrency
       return present(session, '本频道个人货币排行榜', currency,
         await channelRank(ctx, session.platform, session.channelId, currency, limit))
@@ -191,7 +191,7 @@ export function apply(ctx: Context, config: Config) {
   cmd.subcommand('.跨频道排行榜 [count:posint]', '查看跨频道排行榜')
     .option('currency', '-c <currency:string> 指定货币种类')
     .action(async ({ session, options }, count) => {
-      const limit = count || config.defaultLeaderboardDisplayCount
+      const limit = displayLimit(count, config.defaultLeaderboardDisplayCount, config.maxLeaderboardDisplayCount)
       const currency = options.currency || config.defaultCurrency
       return present(session, '跨频道个人货币排行榜', currency,
         await globalRank(ctx, session.platform, currency, limit))
