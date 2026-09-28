@@ -2,19 +2,18 @@
 
 Koishi 插件：按货币种类生成跨频道通用货币排行榜
 
-[![GitHub](https://img.shields.io/badge/GitHub-仓库-181717)](https://github.com/araea/koishi-plugin-monetary-rank) [![npm](https://img.shields.io/badge/npm-包-CB3837)](https://www.npmjs.com/package/koishi-plugin-monetary-rank)
+[![GitHub](https://img.shields.io/badge/GitHub-araea%2Fkoishi--plugin--monetary--rank-181717?logo=github&logoColor=white)](https://github.com/araea/koishi-plugin-monetary-rank)
+[![npm](https://img.shields.io/npm/v/koishi-plugin-monetary-rank?logo=npm&logoColor=white&color=CB3837)](https://www.npmjs.com/package/koishi-plugin-monetary-rank)
 
 ## 安装
 
 ```sh
-yarn add koishi-plugin-monetary-rank
+npm i koishi-plugin-monetary-rank
 ```
 
-启用插件，并安装 `database`、`monetary` 与 `bind` 插件。图片版排行榜需要 `puppeteer` 与 `canvas` 服务。图片资源与 message-counter 共用 `data/messageCounter/`。
+启用插件，并安装 `database` 与 `monetary` 服务。图片版排行榜需要 `puppeteer` 与 `canvas` 服务，资源与 message-counter 共用 `data/messageCounter/`。
 
 ## 快速使用
-
-启用后使用指令：
 
 | 指令 | 说明 |
 | --- | --- |
@@ -27,31 +26,30 @@ yarn add koishi-plugin-monetary-rank
 
 ## 配置
 
-| 配置项 | 类型 | 默认值 |
-| --- | --- | --- |
-| `defaultCurrency` | string | `"default"` |
-| `defaultLeaderboardDisplayCount` | number | `10` |
-| `isLeaderboardDisplayedAsImage` | boolean | `false` |
-| `style` | `"2"` / `"3"` | 无（仅图片模式可选） |
-| `waitUntil` | `"load"` / `"domcontentloaded"` / `"networkidle0"` / `"networkidle2"` | `"load"` |
-| `horizontalBarBackgroundFullOpacity` | number（0–1） | `0` |
-| `horizontalBarBackgroundOpacity` | number（0–1） | `0.6` |
-| `shouldMoveIconToBarEndLeft` | boolean | `true` |
-| `gridLinesOverBars` | boolean | `true` |
-| `valueFollowsBar` | boolean | `true` |
-| `chartFontScale` | number（0.6–1.6） | `1` |
-
-`style` 仅当 `isLeaderboardDisplayedAsImage` 为 `true` 时可选：`"2"` 为水平柱状排行榜，`"3"` 为紧凑卡片排行榜。
+| 配置项 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `defaultCurrency` | string | `default` | 默认统计的货币种类 |
+| `defaultLeaderboardDisplayCount` | number | `10` | 排行榜默认显示的人数 |
+| `isLeaderboardDisplayedAsImage` | boolean | `false` | 把排行榜渲染成图片 |
+| `style` | `2` / `3` | `2` | 图片样式：`2` 水平柱状，`3` 紧凑卡片 |
+| `waitUntil` | string | `networkidle0` | 截图前等待的页面加载事件 |
+| `horizontalBarBackgroundFullOpacity` | number | `0` | 柱状条背景铺满整行时的不透明度，范围 0–1 |
+| `horizontalBarBackgroundOpacity` | number | `0.6` | 柱状条背景的不透明度，范围 0–1 |
+| `shouldMoveIconToBarEndLeft` | boolean | `true` | 把自定义图标放在柱状条末端左侧 |
+| `gridLinesOverBars` | boolean | `true` | 刻度竖线压在柱状条之上 |
+| `valueFollowsBar` | boolean | `true` | 数额与占比紧跟在自己那根条的尾巴后面 |
+| `chartFontScale` | number | `1` | 图表字号倍率，范围 0.6–1.6 |
 
 ## 限制 / 风险
 
 图片版排行榜需要 `puppeteer` 与 `canvas`，未安装时仅输出文字。
 
-默认货币为 `default`，使用 `-c` 切换到其它货币需该货币已在 `monetary` 中定义。
+默认货币为 `default`；用 `-c` 切换到其它货币时，该货币需已在 `monetary` 中定义。
 
 图片资源与 message-counter 共用 `data/messageCounter/`，卸载 message-counter 可能影响资源加载。
 
-## 必要链接
+## 链接
 
-- GitHub：<https://github.com/araea/koishi-plugin-monetary-rank>
-- npm：<https://www.npmjs.com/package/koishi-plugin-monetary-rank>
+- [设计系统](DESIGN_SYSTEM.md)
+- [更新日志](CHANGELOG.md)
+- [MIT](LICENSE-MIT) / [Apache-2.0](LICENSE-APACHE)
