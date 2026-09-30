@@ -49,8 +49,7 @@ npm i koishi-plugin-monetary-rank
 
 图片资源与 message-counter 共用 `data/messageCounter/`，卸载 message-counter 可能影响资源加载。
 
-## 链接
+## 必要链接
 
 - [设计系统](DESIGN_SYSTEM.md)
-- [更新日志](CHANGELOG.md)
 - [MIT](LICENSE-MIT) / [Apache-2.0](LICENSE-APACHE)
