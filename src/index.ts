@@ -8,6 +8,7 @@ import { renderChart } from './chart'
 import { Config } from './config'
 import { defineTables, RankEntry } from './model'
 import { channelRank, displayLimit, globalRank } from './rank'
+import { helpOf } from './help'
 
 export { Config }
 export const name = 'monetary-rank'
@@ -176,7 +177,11 @@ export function apply(ctx: Context, config: Config) {
 
   const cmd = ctx.command('mrank', '通用货币排行榜')
     .alias('monetaryRank')
-    .action(({ session }) => session.execute('help mrank'))
+    .userFields(['authority'])
+    .action(async ({ session }) => {
+      const { title, entries } = await helpOf(session, 'mrank', ['本频道排行榜', '跨频道排行榜', '查询'].map((name) => `mrank.${name}`))
+      return [`📋 ${title}`, ...entries.map(({ name, description }) => `${name} · ${description}`), '发送「mrank.本频道排行榜」看本频道，「mrank.查询」看自己的余额。'].join('\n')
+    })
 
   // 指令主名取短的，长名保留为别名，老用户输入不受影响。
   cmd.subcommand('.本频道排行榜 [count:posint]', '查看本频道排行榜')

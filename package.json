@@ -1,7 +1,7 @@
 {
   "name": "koishi-plugin-monetary-rank",
   "description": "Koishi 插件：按货币种类生成跨频道通用货币排行榜。",
-  "version": "3.9.1",
+  "version": "3.10.0",
   "main": "lib/index.js",
   "typings": "lib/index.d.ts",
   "files": [
