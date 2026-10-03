@@ -23,7 +23,6 @@ npm i koishi-plugin-monetary-rank
 | `mrank.查询 [@用户]` | 查询货币余额 |
 
 使用 `-c <货币种类>` 可临时指定货币。
-
 ## 配置
 
 | 配置项 | 类型 | 默认值 | 说明 |
@@ -43,13 +42,13 @@ npm i koishi-plugin-monetary-rank
 
 ## 限制 / 风险
 
-图片版排行榜需要 `puppeteer` 与 `canvas`，未安装时仅输出文字。
+图片版排行榜未安装 `puppeteer` 与 `canvas` 时仅输出文字。
 
-默认货币为 `default`；用 `-c` 切换到其它货币时，该货币需已在 `monetary` 中定义。
+用 `-c` 切换货币时，该货币需已在 `monetary` 中定义。
 
-图片资源与 message-counter 共用 `data/messageCounter/`，卸载 message-counter 可能影响资源加载。
+图片资源与 message-counter 共用 `data/messageCounter/`，卸载 message-counter 会影响资源加载。
 
-## 必要链接
+## 链接
 
 - [设计系统](DESIGN_SYSTEM.md)
 - [MIT](LICENSE-MIT) / [Apache-2.0](LICENSE-APACHE)
