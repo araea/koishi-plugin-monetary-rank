@@ -1,6 +1,7 @@
 import { h } from 'koishi'
 import { Asset, NICKNAME_FONT } from './assets'
 import { baseline, EMPHASIZED_WEIGHT, scheme, harmonize, CHART_TYPE, LEGACY_CHART_SIZE, FONT_STACK } from './m3'
+import { MEDAL_INK, medalSpec, MedalSpec } from './medal'
 
 /*
  * 这张榜与 message-counter 的水平柱状榜共用一套版式与一套配色。
@@ -118,8 +119,9 @@ const INK_FAINT = SCHEME.onSurfaceVariant
 const HAIRLINE = 'rgba(0, 0, 0, 0.05)'
 /** 头像底下那圈发丝细的边：不透明的 outline-variant，垫在头像下面。 */
 const GRID_LINE = SCHEME.outlineVariant
-/** 前三名的名次色：金、银、铜。含义在颜色本身，不跟主题也不跟头像走。 */
-const MEDALS = [SCHEME.primary, SCHEME.secondary, SCHEME.tertiary]
+/** 前三名的名次色：金、银、铜。含义在颜色本身，不跟主题也不跟头像走；
+ *  与 acumen 的 `MEDALS` 同一组色，头像外的奖牌圈（`medal.ts`）也以它为深端。 */
+const MEDALS = MEDAL_INK
 /** 取不到头像时的兜底色，即 acumen 的 `FALLBACK_THEME`（主色）。 */
 const FALLBACK_THEME = SCHEME.primary
 
@@ -278,6 +280,58 @@ const percentOf = (value: number, total: number) =>
   total > 0 ? formatPercent(value, total) : ''
 
 /**
+ * 前三名头像外的奖牌：把 `medal.ts` 算好的规格拼成 SVG。
+ *
+ * svg 本身只有 1×1，摆在头像的圆心上，内容靠 `overflow: visible` 画出来——这样所有坐标
+ * 都以圆心为原点，与规格一致，不必再换算。柔光与圈分成两张：柔光垫在轨道与条之下，
+ * 只染纸面；圈与皇冠压在头像之上。message-counter 的画布版用的是同一份规格。
+ */
+/** 坐标留三位小数：SVG 里不必带一长串浮点尾巴。 */
+const round3 = (value: number) => +value.toFixed(3)
+
+function medalLayers(spec: MedalSpec, left: number, top: number) {
+  const place = `left:${round3(left)}px;top:${round3(top)}px`
+  const { ring, glow, crown } = spec
+
+  // 柔光：圆环渐变。半径 from 以内全透明，到 from 处一步跳到最大不透明度，再平方衰减到 0
+  const hard = glow ? glow.from / glow.to : 0
+  const glowSvg = glow
+    ? `<svg class="medal" style="${place}" width="1" height="1" aria-hidden="true">
+          <defs><radialGradient id="mr-glow" gradientUnits="userSpaceOnUse" cx="0" cy="0" r="${round3(glow.to)}">
+            <stop offset="0" stop-color="${glow.color}" stop-opacity="0"/>
+            <stop offset="${round3(hard)}" stop-color="${glow.color}" stop-opacity="0"/>
+            ${glow.stops
+              .map(([f, alpha]) => `<stop offset="${round3(hard + f * (1 - hard))}" stop-color="${glow.color}" stop-opacity="${round3(alpha)}"/>`)
+              .join('')}
+          </radialGradient></defs>
+          <circle r="${round3(glow.to)}" fill="url(#mr-glow)"/>
+        </svg>`
+    : ''
+
+  const crownSvg = crown
+    ? `<linearGradient id="mr-crown" gradientUnits="userSpaceOnUse" x1="0" y1="${crown.from}" x2="0" y2="${crown.to}">
+            ${crown.stops.map(([offset, color]) => `<stop offset="${offset}" stop-color="${color}"/>`).join('')}
+          </linearGradient>`
+    : ''
+  const crownBody = crown
+    ? `<g transform="matrix(${crown.matrix.map(round3).join(' ')})">
+          <polygon points="${crown.body.map(([x, y]) => `${x},${y}`).join(' ')}" fill="url(#mr-crown)"/>
+          ${crown.tips.map(([x, y]) => `<circle cx="${x}" cy="${y}" r="${crown.tipRadius}" fill="${crown.tipColor}"/>`).join('')}
+        </g>`
+    : ''
+
+  const ringSvg = `<svg class="medal medal--ring" style="${place}" width="1" height="1" aria-hidden="true">
+          <defs><linearGradient id="mr-ring-${spec.rank}" gradientUnits="userSpaceOnUse" x1="${round3(-ring.diagonal)}" y1="${round3(-ring.diagonal)}" x2="${round3(ring.diagonal)}" y2="${round3(ring.diagonal)}">
+            ${ring.stops.map(([offset, color]) => `<stop offset="${round3(offset)}" stop-color="${color}"/>`).join('')}
+          </linearGradient>${crownSvg}</defs>
+          <circle r="${round3(ring.radius)}" fill="none" stroke="url(#mr-ring-${spec.rank})" stroke-width="${ring.width}"/>
+          ${crownBody}
+        </svg>`
+
+  return { glow: glowSvg, ring: ringSvg }
+}
+
+/**
  * 样式 2：带头像的水平条形榜。
  *
  * 版式与配色都与 acumen 的 `draw_bar_chart` 相同：版式分五个纵列——名次 → 头像 →
@@ -391,10 +445,15 @@ export function renderChart(title: string, subtitle: string, rows: ChartRow[], i
       : `<span class="value value--col" style="left:${(valueRightX - valueColumnWidth).toFixed(1)}px;width:${valueColumnWidth.toFixed(1)}px;color:${valueInk}">${block.countText}</span>
         <span class="value value--col" style="left:${(percentRightX - percentColumnWidth).toFixed(1)}px;width:${percentColumnWidth.toFixed(1)}px"><b style="color:${percentInk}">${block.percentText}</b></span>`
 
+    // 前三名：头像外的奖牌圈，榜首另有柔光与小皇冠。圈压在头像之上，没有它时才垫发丝边
+    const spec = medalSpec(index + 1, LAYOUT.avatarSize / 2)
+    const medal = spec && medalLayers(spec, avatarX + LAYOUT.avatarSize / 2, LAYOUT.avatarSize / 2)
+
     return `
       <li class="row">
+        ${medal?.glow ?? ''}
         <span class="rank" style="width:${rankColW}px;color:${rankInk(index + 1)}"><span>${index + 1}</span></span>
-        <img class="avatar" src="data:image/png;base64,${row.avatarBase64}">
+        <img class="avatar${medal ? ' avatar--medal' : ''}" src="data:image/png;base64,${row.avatarBase64}">
         <span class="track" style="background:${trackCss}">
           <span class="ticks${options.gridLinesOverBars ? ' ticks--over' : ''}">${ticks}</span>
           ${fullLayer}
@@ -409,6 +468,7 @@ export function renderChart(title: string, subtitle: string, rows: ChartRow[], i
         </span>
         <span class="handle" style="left:${barX + barWidth - LAYOUT.handleWidth}px;background:${handleCss}"></span>
         ${valueBlock}
+        ${medal?.ring ?? ''}
       </li>`
   }).join('')
 
@@ -466,7 +526,10 @@ export function renderChart(title: string, subtitle: string, rows: ChartRow[], i
     }
     .rank span { font-size: ${font.rank}px; line-height: 1; }
 
+    /* position: relative 让头像按文档顺序与别的定位元素叠放：上一行榜首的柔光
+       不会压到下一行的头像上 */
     .avatar {
+      position: relative;
       width: ${LAYOUT.avatarSize}px; height: ${LAYOUT.avatarSize}px; flex: none;
       margin-right: ${LAYOUT.avatarGap}px;
       border-radius: var(--md-sys-shape-corner-full); object-fit: cover;
@@ -474,6 +537,13 @@ export function renderChart(title: string, subtitle: string, rows: ChartRow[], i
       box-shadow: 0 0 0 1px ${GRID_LINE};
       background: #c8c8c8;
     }
+    /* 前三名有奖牌圈包着，不再垫这一圈 */
+    .avatar--medal { box-shadow: none; }
+
+    /* 奖牌：svg 只有 1×1，摆在头像圆心上，内容靠 overflow 画出来（见 medalLayers）。
+       柔光垫在轨道之下，圈与皇冠压在头像、条与把手之上 */
+    .medal { position: absolute; overflow: visible; pointer-events: none; }
+    .medal--ring { z-index: 4; }
 
     /* 轨道定长：条最长就铺满它；条的圆角交给这层裁 */
     .track {
