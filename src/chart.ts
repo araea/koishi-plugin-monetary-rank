@@ -2,6 +2,7 @@ import { h } from 'koishi'
 import { Asset, NICKNAME_FONT } from './assets'
 import { baseline, EMPHASIZED_WEIGHT, scheme, harmonize, CHART_TYPE, LEGACY_CHART_SIZE, FONT_STACK } from './m3'
 import { MEDAL_INK, medalSpec, MedalSpec } from './medal'
+import { GRID_LINE, INK, INK_SOFT, PAPER } from './paper'
 
 /*
  * 这张榜与 message-counter 的水平柱状榜共用一套版式与一套配色。
@@ -108,17 +109,12 @@ const CHART_FONT = FONT_STACK
  * 两张榜的颜色才谈得上一致。改了这里，acumen 那边要对着一块改。
  */
 
-/** 页面与文字的纸色、墨色，取自 acumen 的 `ColorScheme::default`（scheme-manual）。 */
-const PAPER = SCHEME.surface // surface，页面底色
-const INK = SCHEME.onSurface // on-surface，标题
-const INK_SOFT = SCHEME.onSurfaceVariant // on-surface-variant，元信息行
-/** on-surface-faint 在暖白纸上差一线（4.44∶1），这是它过 4.5∶1 之后的值，
- *  即 acumen 的 `ColorScheme::readable_faint()`：名次这类参照数字的墨色。 */
-const INK_FAINT = SCHEME.onSurfaceVariant
+/* 页面与文字的纸色、墨色（PAPER / INK / INK_SOFT / GRID_LINE）是 `paper.ts` 里那一族暖白，
+   与 acumen 统计图逐档相同；条色与轨道由头像主色经 HCT 推出，`SCHEME` 只提供主题色相。 */
+/** 名次这类参照数字的墨色：与次级墨同一档（acumen 的 `readable_faint()` 取的也是它）。 */
+const INK_FAINT = INK_SOFT
 /** 刻度竖线：5% 的黑，与 acumen 同一档。条是浅色容器，再深就比条尾的把手抢眼。 */
 const HAIRLINE = 'rgba(0, 0, 0, 0.05)'
-/** 头像底下那圈发丝细的边：不透明的 outline-variant，垫在头像下面。 */
-const GRID_LINE = SCHEME.outlineVariant
 /** 前三名的名次色：金、银、铜。含义在颜色本身，不跟主题也不跟头像走；
  *  与 acumen 的 `MEDALS` 同一组色，头像外的奖牌圈（`medal.ts`）也以它为深端。 */
 const MEDALS = MEDAL_INK
